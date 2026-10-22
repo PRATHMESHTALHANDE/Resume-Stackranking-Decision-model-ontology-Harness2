@@ -1,0 +1,6 @@
+{
+  "manifest_version": "1.0.0",
+  "project": "Resume Intelligence, Ranking & Fairness Lab",
+  "policy": "Zero unmonitored global caching. All model weights and checkpoints must be registered here.",
+  "models": []
+}
