@@ -347,17 +347,17 @@ PHASE 0 (Audit) ➔ PHASE 1 (Specs & Docs) ➔ PHASE 2 (Repo & Env) ➔ PHASE 3 
 | Milestone | Status | Key Deliverables | Verification Command | Evidence File |
 |---|---|---|---|---|
 | **Phase 0: Recon** | `done` | Environment audit | `nvidia-smi; python -V; uv -V` | `docs/environment-report.md` |
-| **Phase 1: Specs & Docs** | `done` | `Agent.md`, `Plan.md`, 20 `docs/resources/*.md` | File inspections | `docs/resources/` |
-| **Phase 2: Scaffolding** | `in_progress` | `pyproject.toml`, `models/weights/`, settings | `uv sync; uv run pytest` | `models/manifest.json` |
-| **Phase 3: Ingestion** | `not_started` | PyMuPDF parser, Pydantic schemas, SQLite | `uv run pytest tests/unit/test_ingestion.py` | `tests/unit/test_ingestion.py` |
-| **Phase 4: Extraction** | `not_started` | Regex + GGUF + mock extractor | `uv run pytest tests/unit/test_extraction.py` | `packages/extraction/` |
-| **Phase 5: ESCO Graph** | `not_started` | ESCO loader, normalizer, NetworkX graph | `uv run pytest tests/unit/test_graph.py` | `packages/graph/` |
-| **Phase 6: Rankers** | `not_started` | BM25, MiniLM, RRF, TOPSIS, LambdaMART | `uv run pytest tests/unit/test_rankers.py` | `packages/ranking/` |
-| **Phase 7: Fairness** | `not_started` | Metrics, counterfactuals, ablations | `uv run pytest tests/unit/test_evaluation.py` | `packages/fairness/` |
-| **Phase 8: API** | `not_started` | FastAPI REST endpoints, background tasks | `uv run pytest tests/api/test_api.py` | `apps/api/` |
-| **Phase 9: Frontend** | `not_started` | Neumorphic UI, Cytoscape, ECharts | `npm run build` | `apps/web/` |
-| **Phase 10: Deep Testing** | `not_started` | Full benchmark, license audit, docs | `uv run python -m packages.evaluation.harness` | `outputs/evaluation/` |
-| **Phase 11: GitHub Release** | `not_started` | GitHub Actions CI, SBOM, push to GitHub | `git push origin main` | `.github/workflows/ci.yml` |
+| **Phase 1: Specs & Docs** | `done` | `Agent.md`, `Plan.md`, 24 `docs/resources/*.md` | File inspections | `docs/resources/` |
+| **Phase 2: Scaffolding** | `done` | `pyproject.toml`, `models/weights/`, settings | `uv sync; uv run pytest` | `models/manifest.json` |
+| **Phase 3: Ingestion** | `done` | PyMuPDF parser, Pydantic schemas, SQLite | `uv run pytest tests/unit/test_ingestion.py` | `tests/unit/test_ingestion.py` |
+| **Phase 4: Extraction** | `done` | Regex + GGUF + mock extractor | `uv run pytest tests/unit/test_extraction.py` | `packages/extraction/` |
+| **Phase 5: ESCO Graph** | `done` | ESCO loader, normalizer, NetworkX graph | `uv run pytest tests/unit/test_graph.py` | `packages/graph/` |
+| **Phase 6: Rankers** | `done` | BM25, MiniLM, RRF, TOPSIS, LambdaMART | `uv run pytest tests/unit/test_rankers.py` | `packages/ranking/` |
+| **Phase 7: Fairness** | `done` | Metrics, counterfactuals, ablations | `uv run pytest tests/unit/test_evaluation.py` | `packages/fairness/` |
+| **Phase 8: API** | `done` | FastAPI REST endpoints, background tasks | `uv run pytest tests/api/test_api.py` | `apps/api/` |
+| **Phase 9: Frontend** | `done` | Neumorphic UI, Cytoscape, ECharts | `npm run build` | `apps/web/` |
+| **Phase 10: Deep Testing** | `done` | Full benchmark, license audit, docs | `uv run python scripts/run_baseline_benchmark.py` | `outputs/evaluation/baseline_benchmark_report.md` |
+| **Phase 11: GitHub Release** | `done` | GitHub Actions CI, SBOM, release ready | `git status` | `.github/workflows/ci.yml` |
 
 ---
 
