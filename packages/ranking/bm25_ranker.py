@@ -84,14 +84,15 @@ class BM25Ranker(BaseRetriever, BaseRanker):
             cand = candidate_map[cid]
             citations = [s.evidence for s in cand.skills if s.evidence is not None]
 
+            clamped_score = max(0.0, float(score))
             ranking_results.append(
                 RankingResult(
                     candidate_id=cid,
                     job_id=job.job_id,
                     rank=rank_idx,
-                    score=float(score),
+                    score=clamped_score,
                     model_name="bm25",
-                    component_scores={"bm25_lexical_score": float(score)},
+                    component_scores={"bm25_lexical_score": clamped_score},
                     evidence_citations=citations[:5],
                     uncertainty_markers=cand.uncertainty_flags,
                     run_id=run_id,
