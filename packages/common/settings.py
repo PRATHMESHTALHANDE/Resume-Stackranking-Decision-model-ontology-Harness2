@@ -91,3 +91,8 @@ class AppSettings:
     RRF_K_PARAMETER: int = 60
 
 settings = AppSettings()
+
+APP_NAME: str = settings.PROJECT_NAME
+APP_VERSION: str = settings.VERSION
+ENVIRONMENT: str = os.getenv("APP_ENV", "development")
+DATABASE_PATH: Path = SQLITE_DB_PATH

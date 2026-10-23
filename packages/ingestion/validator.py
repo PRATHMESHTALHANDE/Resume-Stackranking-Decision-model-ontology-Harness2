@@ -114,3 +114,13 @@ def validate_file_metadata(
     }
 
     return True, "", metadata
+
+
+class DocumentValidator:
+    """Validator class offering static validation methods for uploaded documents."""
+
+    @staticmethod
+    def validate_file(filename: str, file_bytes: bytes, content_type: str = "") -> Tuple[bool, list]:
+        """Validates file metadata and returns (is_valid, list_of_error_strings)."""
+        valid, msg, _ = validate_file_metadata(filename, file_bytes, content_type)
+        return valid, [msg] if msg else []

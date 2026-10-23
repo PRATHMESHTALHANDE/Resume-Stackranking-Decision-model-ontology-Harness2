@@ -48,7 +48,7 @@ class EvidenceReference(BaseModel):
     )
     verbatim_snippet: str = Field(
         ...,
-        min_length=3,
+        min_length=1,
         description="Exact, un-altered text excerpt cited from the resume",
     )
     extraction_confidence: float = Field(
@@ -273,6 +273,7 @@ class RankingResult(BaseModel):
         description="Uncertainty warnings (e.g. 'missing_required_criterion:Docker')",
     )
     run_id: str = Field(..., description="Unique ID of the ranking execution run")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class EvaluationRun(BaseModel):

@@ -256,3 +256,297 @@ def delete_resume(document_id: str, db_path: Optional[Path] = None) -> None:
             conn.execute("DELETE FROM resumes WHERE document_id = ?;", (document_id,))
     finally:
         conn.close()
+
+
+def list_resumes(db_path: Optional[Path] = None) -> List[ResumeDocument]:
+    """Retrieves all ingested resume documents."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute("SELECT * FROM resumes ORDER BY created_at DESC;")
+        rows = cursor.fetchall()
+        docs = []
+        for r in rows:
+            docs.append(
+                ResumeDocument(
+                    document_id=r["document_id"],
+                    content_hash=r["content_hash"],
+                    source_filename=r["source_filename"],
+                    file_type=r["file_type"],
+                    page_count=r["page_count"],
+                    file_size_bytes=r["file_size_bytes"],
+                    parser_status=r["parser_status"],
+                    warnings=json.loads(r["warnings_json"]),
+                    created_at=datetime.fromisoformat(r["created_at"]),
+                )
+            )
+        return docs
+    finally:
+        conn.close()
+
+
+def get_resume(document_id: str, db_path: Optional[Path] = None) -> Optional[ResumeDocument]:
+    """Retrieves a single ResumeDocument by ID."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute("SELECT * FROM resumes WHERE document_id = ?;", (document_id,))
+        r = cursor.fetchone()
+        if not r:
+            return None
+        return ResumeDocument(
+            document_id=r["document_id"],
+            content_hash=r["content_hash"],
+            source_filename=r["source_filename"],
+            file_type=r["file_type"],
+            page_count=r["page_count"],
+            file_size_bytes=r["file_size_bytes"],
+            parser_status=r["parser_status"],
+            warnings=json.loads(r["warnings_json"]),
+            created_at=datetime.fromisoformat(r["created_at"]),
+        )
+    finally:
+        conn.close()
+
+
+def list_parsed_profiles(db_path: Optional[Path] = None) -> List[ResumeProfile]:
+    """Retrieves all parsed candidate profiles."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute("SELECT * FROM parsed_profiles ORDER BY created_at DESC;")
+        rows = cursor.fetchall()
+        profiles = []
+        for r in rows:
+            profiles.append(
+                ResumeProfile(
+                    candidate_id=r["candidate_id"],
+                    document_id=r["document_id"],
+                    skills=json.loads(r["skills_json"]),
+                    experience_items=json.loads(r["experience_json"]),
+                    education_items=json.loads(r["education_json"]),
+                    total_experience_years=r["total_experience_years"],
+                    summary=r["summary"],
+                    uncertainty_flags=json.loads(r["uncertainty_json"]),
+                    extraction_method=r["extraction_method"],
+                    created_at=datetime.fromisoformat(r["created_at"]),
+                )
+            )
+        return profiles
+    finally:
+        conn.close()
+
+
+def get_parsed_profile(candidate_id: str, db_path: Optional[Path] = None) -> Optional[ResumeProfile]:
+    """Retrieves a single candidate profile by ID."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute("SELECT * FROM parsed_profiles WHERE candidate_id = ?;", (candidate_id,))
+        r = cursor.fetchone()
+        if not r:
+            return None
+        return ResumeProfile(
+            candidate_id=r["candidate_id"],
+            document_id=r["document_id"],
+            skills=json.loads(r["skills_json"]),
+            experience_items=json.loads(r["experience_json"]),
+            education_items=json.loads(r["education_json"]),
+            total_experience_years=r["total_experience_years"],
+            summary=r["summary"],
+            uncertainty_flags=json.loads(r["uncertainty_json"]),
+            extraction_method=r["extraction_method"],
+            created_at=datetime.fromisoformat(r["created_at"]),
+        )
+    finally:
+        conn.close()
+
+
+def list_jobs(db_path: Optional[Path] = None) -> List[JobDescription]:
+    """Retrieves all job descriptions."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC;")
+        rows = cursor.fetchall()
+        jobs = []
+        for r in rows:
+            jobs.append(
+                JobDescription(
+                    job_id=r["job_id"],
+                    title=r["title"],
+                    description_text=r["description_text"],
+                    criteria=json.loads(r["criteria_json"]),
+                    minimum_experience_years=r["minimum_experience_years"],
+                    version=r["version"],
+                    created_at=datetime.fromisoformat(r["created_at"]),
+                )
+            )
+        return jobs
+    finally:
+        conn.close()
+
+
+def get_job(job_id: str, db_path: Optional[Path] = None) -> Optional[JobDescription]:
+    """Retrieves a job description by ID."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute("SELECT * FROM jobs WHERE job_id = ?;", (job_id,))
+        r = cursor.fetchone()
+        if not r:
+            return None
+        return JobDescription(
+            job_id=r["job_id"],
+            title=r["title"],
+            description_text=r["description_text"],
+            criteria=json.loads(r["criteria_json"]),
+            minimum_experience_years=r["minimum_experience_years"],
+            version=r["version"],
+            created_at=datetime.fromisoformat(r["created_at"]),
+        )
+    finally:
+        conn.close()
+
+
+def delete_job(job_id: str, db_path: Optional[Path] = None) -> None:
+    """Deletes a job description and its associated rankings."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute("DELETE FROM jobs WHERE job_id = ?;", (job_id,))
+    finally:
+        conn.close()
+
+
+def save_ranking_results(results: List[RankingResult], db_path: Optional[Path] = None) -> None:
+    """Saves a batch of ranking results for a run."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.executemany(
+                """
+                INSERT INTO rankings (
+                    run_id, job_id, candidate_id, rank, score, model_name,
+                    component_scores_json, evidence_json, uncertainty_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                [
+                    (
+                        res.run_id,
+                        res.job_id,
+                        res.candidate_id,
+                        res.rank,
+                        res.score,
+                        res.model_name,
+                        json.dumps(res.component_scores),
+                        json.dumps([e.model_dump() for e in res.evidence_citations]),
+                        json.dumps(res.uncertainty_markers),
+                        res.created_at.isoformat(),
+                    )
+                    for res in results
+                ],
+            )
+    finally:
+        conn.close()
+
+
+def get_rankings_by_run(run_id: str, db_path: Optional[Path] = None) -> List[RankingResult]:
+    """Retrieves ranking results for a specific run ID."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute(
+            "SELECT * FROM rankings WHERE run_id = ? ORDER BY rank ASC;",
+            (run_id,),
+        )
+        rows = cursor.fetchall()
+        results = []
+        for r in rows:
+            results.append(
+                RankingResult(
+                    candidate_id=r["candidate_id"],
+                    job_id=r["job_id"],
+                    rank=r["rank"],
+                    score=r["score"],
+                    model_name=r["model_name"],
+                    component_scores=json.loads(r["component_scores_json"]),
+                    evidence_citations=json.loads(r["evidence_json"]),
+                    uncertainty_markers=json.loads(r["uncertainty_json"]),
+                    run_id=r["run_id"],
+                    created_at=datetime.fromisoformat(r["created_at"]),
+                )
+            )
+        return results
+    finally:
+        conn.close()
+
+
+def save_evaluation_run(run: EvaluationRun, db_path: Optional[Path] = None) -> None:
+    """Saves an evaluation run record."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO evaluation_runs (
+                    run_id, timestamp, model_name, dataset_split, split_hash,
+                    candidate_count, query_count, ndcg_at_5, ndcg_at_10, mrr,
+                    precision_at_5, recall_at_10, latency_median_ms, latency_p95_ms,
+                    candidates_per_second, peak_ram_mb, peak_vram_mb,
+                    counterfactual_tau, shortlist_crossings
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    run.run_id,
+                    run.timestamp.isoformat(),
+                    run.model_name,
+                    run.dataset_split,
+                    run.split_hash,
+                    run.candidate_count,
+                    run.query_count,
+                    run.ndcg_at_5,
+                    run.ndcg_at_10,
+                    run.mrr,
+                    run.precision_at_5,
+                    run.recall_at_10,
+                    run.latency_median_ms,
+                    run.latency_p95_ms,
+                    run.candidates_per_second,
+                    run.peak_ram_mb,
+                    run.peak_vram_mb,
+                    run.counterfactual_tau,
+                    run.shortlist_crossings,
+                ),
+            )
+    finally:
+        conn.close()
+
+
+def list_evaluation_runs(db_path: Optional[Path] = None) -> List[EvaluationRun]:
+    """Retrieves all evaluation runs."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute("SELECT * FROM evaluation_runs ORDER BY timestamp DESC;")
+        rows = cursor.fetchall()
+        runs = []
+        for r in rows:
+            runs.append(
+                EvaluationRun(
+                    run_id=r["run_id"],
+                    timestamp=datetime.fromisoformat(r["timestamp"]),
+                    model_name=r["model_name"],
+                    dataset_split=r["dataset_split"],
+                    split_hash=r["split_hash"],
+                    candidate_count=r["candidate_count"],
+                    query_count=r["query_count"],
+                    ndcg_at_5=r["ndcg_at_5"],
+                    ndcg_at_10=r["ndcg_at_10"],
+                    mrr=r["mrr"],
+                    precision_at_5=r["precision_at_5"],
+                    recall_at_10=r["recall_at_10"],
+                    latency_median_ms=r["latency_median_ms"],
+                    latency_p95_ms=r["latency_p95_ms"],
+                    candidates_per_second=r["candidates_per_second"],
+                    peak_ram_mb=r["peak_ram_mb"],
+                    peak_vram_mb=r["peak_vram_mb"],
+                    counterfactual_tau=r["counterfactual_tau"],
+                    shortlist_crossings=r["shortlist_crossings"],
+                )
+            )
+        return runs
+    finally:
+        conn.close()
