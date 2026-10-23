@@ -3,7 +3,7 @@
 > **Role:** You are the Lead Software Architect, ML Engineer, Full-Stack Frontend Engineer, QA Specialist, and Technical Writer responsible for implementing the open-source platform described in `Project.md` and `Plan.md`.  
 > **Master Reference:** [Project.md](file:///c:/Users/roari/Downloads/AI%20Projects/HR%20Resume%20Stackranking%20-%20Decision%20model%20+%20LLM%20+%20Ontology%20+%20Harness2/Project.md) | [Plan.md](file:///c:/Users/roari/Downloads/AI%20Projects/HR%20Resume%20Stackranking%20-%20Decision%20model%20+%20LLM%20+%20Ontology%20+%20Harness2/Plan.md)  
 > **Target Hardware:** Windows 11, Intel Core i7-12650H (10 Cores, 16 Logical Processors), 16 GB Physical RAM, NVIDIA GeForce RTX 3050 Laptop GPU (4 GB VRAM, Driver 561.17, CUDA 12.6).  
-> **Core Operating Principles:** 100% Open-Source; Local-First; Zero Unmonitored Global Disk Caching; Human-in-the-Loop Review Aid; Comprehensive Code Commenting; Accessible Neumorphic UI.
+> **Core Operating Principles:** 100% Open-Source; Local-First; Zero Unmonitored Global Disk Caching; Human-in-the-Loop Review Aid; Comprehensive Code Commenting; Accessible Neumorphic UI; Deep Testing & Evaluation; Ready for GitHub Publication.
 
 ---
 
@@ -11,8 +11,8 @@
 
 Antigravity must adhere strictly to these principles across every single task:
 
-1. **Evidence Before Ranking:** Never generate a candidate score or ranking without explicit, traceable evidence snippets extracted verbatim from the parsed resume document.
-2. **Zero Fact Fabrication / Hallucination:** Never infer unstated degrees, certifications, job titles, or skills. Missing evidence must be explicitly labeled as `insufficient_information` or `uncertain`, never penalized as a negative fact without policy.
+1. **Evidence Before Ranking:** Never generate a candidate score or ranking without explicit, traceable evidence snippets extracted verbatim from the parsed resume document. Every score must link to a document page, paragraph, or section.
+2. **Zero Fact Fabrication / Hallucination:** Never infer unstated degrees, certifications, job titles, or skills. Missing evidence must be explicitly labeled as `insufficient_information` or `uncertain`, never penalized as an unstated negative without documented policy.
 3. **100% Open Source & Zero Mandatory Paid APIs:** The entire system must run completely local and offline after initial package installation. No external LLM APIs (OpenAI, Anthropic, Google Cloud Vertex, etc.) may be required for core functionality.
 4. **Local Model Weight Isolation (`models/weights/` & `models/cache/`):**
    - **CRITICAL DISK INTEGRITY RULE:** Model weights, tokenizers, checkpoints, and GGUF files must NEVER be silently written to global user profile caches (such as `C:\Users\<user>\.cache\huggingface`).
@@ -20,7 +20,7 @@ Antigravity must adhere strictly to these principles across every single task:
      - `HF_HOME = <project_root>/models/cache/huggingface`
      - `TRANSFORMERS_CACHE = <project_root>/models/cache/huggingface`
      - `SENTENCE_TRANSFORMERS_HOME = <project_root>/models/cache/sentence_transformers`
-     - `LLAMA_CPP_MODELS_DIR = <project_root>/models/weights/gguf`
+     - `LLAMA_CPP_MODELS_DIR = <project_root>/models/weights/llm`
      - `ESCO_DIR = <project_root>/data/ontology/esco`
    - Every downloaded or converted model asset must be registered in `<project_root>/models/manifest.json` with its relative path, exact byte size, SHA-256 checksum, upstream URL, and license.
 5. **Separate Markdown Documentation for Every Resource (`docs/resources/*.md`):**
@@ -38,6 +38,10 @@ Antigravity must adhere strictly to these principles across every single task:
    - The system is an evidence-analysis and ranking decision-support aid for human HR recruiters. It must NEVER execute autonomous hiring, rejection, or candidate disqualification. Every output must display an advisory review banner.
 10. **Laya Decision Model Research Gate:**
     - Laya must be investigated as a formal research task. If the official upstream repository/checkpoint (`convaiinnovations/laya` or `NandhaKishorM/laya`) is verified and runs within 4 GB VRAM, implement the real adapter. If unavailable, blocked, or unlicensed, maintain a typed adapter interface and fixture mock, and generate a transparent blocker report in `docs/research/laya_investigation.md`. Never silently fake model outputs.
+11. **GitHub Repository Cleanliness & Release Quality:**
+    - The codebase will be published as a clean, brand-new GitHub repository.
+    - Zero secrets, API tokens, personal resumes, model weights, or local database blobs (`*.db`) may ever be committed.
+    - Full GitHub Actions CI workflow must pass all linters, type checks, and tests on a pristine clone.
 
 ---
 
@@ -89,31 +93,7 @@ Each resource document must strictly follow this structure:
 - Known limitations, CPU fallbacks, error handling strategy.
 ```
 
-### Initial Required Resource Catalog:
-1. `docs/resources/fastapi.md`
-2. `docs/resources/pydantic.md`
-3. `docs/resources/pymupdf.md`
-4. `docs/resources/docling.md`
-5. `docs/resources/sqlite.md`
-6. `docs/resources/rank-bm25.md`
-7. `docs/resources/sentence-transformers-all-minilm-l6-v2.md`
-8. `docs/resources/esco-ontology.md`
-9. `docs/resources/networkx.md`
-10. `docs/resources/topsis.md`
-11. `docs/resources/lightgbm.md`
-12. `docs/resources/laya-decision-model.md`
-13. `docs/resources/llama-cpp-python.md`
-14. `docs/resources/qwen-gguf.md`
-15. `docs/resources/phi-4-mini-gguf.md`
-16. `docs/resources/cross-encoder-ms-marco.md`
-17. `docs/resources/ranx.md`
-18. `docs/resources/fairlearn.md`
-19. `docs/resources/react-vite-typescript.md`
-20. `docs/resources/tailwind-css-neumorphism.md`
-21. `docs/resources/tanstack-query.md`
-22. `docs/resources/tanstack-table.md`
-23. `docs/resources/cytoscape-js.md`
-24. `docs/resources/apache-echarts.md`
+The master index must be maintained in [`docs/resources/README.md`](file:///c:/Users/roari/Downloads/AI%20Projects/HR%20Resume%20Stackranking%20-%20Decision%20model%20+%20LLM%20+%20Ontology%20+%20Harness2/docs/resources/README.md).
 
 ---
 
@@ -137,15 +117,27 @@ models/
 ### 4.2 Central Settings Enforcer (`packages/common/settings.py`)
 All backend scripts and workers must import from `packages.common.settings` before loading any Hugging Face, PyTorch, or llama.cpp modules:
 ```python
+"""
+Central configuration enforcer isolating model weights and caches to the project workspace.
+"""
 import os
 from pathlib import Path
 
+# Resolve absolute project root directory
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = PROJECT_ROOT / "models"
 WEIGHTS_DIR = MODELS_DIR / "weights"
 CACHE_DIR = MODELS_DIR / "cache"
+ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
+DATA_DIR = PROJECT_ROOT / "data"
 
-# Force environment overrides to isolate disk usage to project workspace
+# Guarantee directories exist
+for p in [WEIGHTS_DIR / "llm", WEIGHTS_DIR / "embeddings", WEIGHTS_DIR / "reranker", 
+          CACHE_DIR / "huggingface", CACHE_DIR / "sentence_transformers", 
+          ARTIFACTS_DIR / "data", ARTIFACTS_DIR / "indices", DATA_DIR / "ontology" / "esco"]:
+    p.mkdir(parents=True, exist_ok=True)
+
+# Force environment overrides to isolate disk usage strictly to project workspace
 os.environ["HF_HOME"] = str(CACHE_DIR / "huggingface")
 os.environ["TRANSFORMERS_CACHE"] = str(CACHE_DIR / "huggingface")
 os.environ["SENTENCE_TRANSFORMERS_HOME"] = str(CACHE_DIR / "sentence_transformers")
@@ -174,7 +166,11 @@ Every line of code written in this project must adhere to strict commenting rule
 
 3. **Inline Comments for Math & Complex Logic:**
    - Explain *why* an operation is performed, not just *what* the syntax does.
-   - Include equations in comments (e.g., `# TOPSIS Euclidean Distance: d_i^+ = sqrt(sum((v_ij - v_j^+)^2))`).
+   - Include equations in comments:
+     - TOPSIS: Euclidean distance $S_i^+ = \sqrt{\sum (v_{ij} - v_j^+)^2}$ and relative closeness $C_i = \frac{S_i^-}{S_i^+ + S_i^-}$.
+     - RRF: Score decay $\text{RRF}(d) = \sum_{m \in M} \frac{1}{k + r_m(d)}$ with $k=60$.
+     - Cosine: $\cos(\theta) = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\| \|\mathbf{v}\|}$.
+     - BM25: Saturation $\text{IDF}(q_i) \cdot \frac{f(q_i, D) \cdot (k_1 + 1)}{f(q_i, D) + k_1 \cdot (1 - b + b \cdot \frac{|D|}{\text{avgdl}})}$.
    - Detail regular expressions, data transformations, and normalization logic.
 
 4. **Frontend Component Comments:**
@@ -213,97 +209,126 @@ Neumorphism relies on subtle, soft dual-light shadows that simulate physical sur
 
 ---
 
-## 7. Master Phased Execution Roadmap
+## 7. Core Data Contracts (`packages/common/schemas.py`)
 
-Antigravity executes in discrete milestones. Each milestone must satisfy its verification gate before proceeding:
+All ingested resumes, job postings, evidence snippets, and rankings must strictly normalize into typed Pydantic v2 schemas:
 
-```text
-PHASE 0 (Audit & Recon) ➔ PHASE 1 (Specs, Rules & Resources) ➔ PHASE 2 (Repo & Env Setup)
-     ➔ PHASE 3 (Data Contracts & Ingestion) ➔ PHASE 4 (Structured Extraction)
-     ➔ PHASE 5 (ESCO Ontology & NetworkX Graph) ➔ PHASE 6 (Retrieval & Rankers)
-     ➔ PHASE 7 (Evaluation & Fairness Harness) ➔ PHASE 8 (FastAPI Backend)
-     ➔ PHASE 9 (Neumorphic Frontend) ➔ PHASE 10 (Verification & Release)
+### 7.1 `EvidenceReference`
+```python
+class EvidenceReference(BaseModel):
+    document_id: str = Field(..., description="Foreign key of source resume")
+    page_number: Optional[int] = Field(None, ge=1, description="1-indexed source page")
+    section_name: Optional[str] = Field(None, description="Experience | Education | Skills")
+    verbatim_snippet: str = Field(..., min_length=5, description="Exact text excerpt")
+    extraction_confidence: float = Field(..., ge=0.0, le=1.0)
 ```
 
-### [x] Phase 0: Hardware & Environment Reconnaissance
-- [x] Measure CPU, RAM, GPU, VRAM, disk space, and CUDA runtime.
-- [x] Record exact hardware: Intel i7-12650H, 16 GB RAM, RTX 3050 Laptop GPU (4 GB VRAM), Windows 11.
-- [x] Verify `uv` CLI and Python 3.11 availability.
+### 7.2 `ResumeProfile`
+```python
+class ResumeProfile(BaseModel):
+    candidate_id: str = Field(..., description="Anonymized candidate identifier")
+    experience_items: List[ExperienceItem] = Field(default_factory=list)
+    skills: List[ResumeSkill] = Field(default_factory=list)
+    education_items: List[EducationItem] = Field(default_factory=list)
+    uncertainty_flags: List[str] = Field(default_factory=list)
+    summary: Optional[str] = None
+    extraction_method: str = Field(..., description="deterministic | llm_gguf | mock")
+```
 
-### [ ] Phase 1: Specifications, Rules & Resource Documentation
-- [x] Update `Agent.md` with hardened guidelines, resource rules, model weights isolation, commenting, and neumorphic UI.
-- [ ] Generate master execution `Plan.md` in the project root.
-- [ ] Initialize `docs/resources/` with comprehensive markdown files for all 24+ core resources.
+### 7.3 `JobDescription`
+```python
+class JobDescription(BaseModel):
+    job_id: str
+    title: str
+    requirements: List[JobCriterion]
+    minimum_experience_years: Optional[float] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+```
 
-### [ ] Phase 2: Repository Scaffolding & Isolated Environment Setup
-- [ ] Scaffold project layout (`apps/`, `packages/`, `configs/`, `data/`, `models/`, `docs/`, `tests/`).
-- [ ] Initialize `pyproject.toml` with `uv` and pin all dependencies.
-- [ ] Configure `models/weights/` and `models/cache/` environment redirection in `packages/common/settings.py`.
-- [ ] Create `models/manifest.json`.
+### 7.4 `RankingResult`
+```python
+class RankingResult(BaseModel):
+    candidate_id: str
+    job_id: str
+    rank: int = Field(..., ge=1)
+    score: float = Field(..., ge=0.0, le=1.0)
+    model_name: str
+    component_scores: Dict[str, float] = Field(default_factory=dict)
+    evidence_citations: List[EvidenceReference] = Field(default_factory=list)
+    uncertainty_markers: List[str] = Field(default_factory=list)
+    run_id: str
+```
 
-### [ ] Phase 3: Core Data Contracts & Document Ingestion
-- [ ] Implement Pydantic v2 schemas in `packages/common/schemas.py` (`ResumeDocument`, `ResumeProfile`, `JobDescription`, `EvidenceReference`, `RankingResult`, `EvaluationRun`).
-- [ ] Implement PDF and DOCX text extraction with page/section provenance in `packages/ingestion/`.
-- [ ] Add SHA-256 deduplication and parser caching.
-- [ ] Write unit tests in `tests/unit/test_ingestion.py`.
-
-### [ ] Phase 4: Structured Extraction & Skill Normalization
-- [ ] Implement deterministic section parsing (regex, date normalizer).
-- [ ] Implement local LLM semantic extractor interface with GGUF support (`llama-cpp-python`).
-- [ ] Implement offline deterministic mock extractor fixture for CI.
-- [ ] Write schema validation and extraction tests in `tests/unit/test_extraction.py`.
-
-### [ ] Phase 5: ESCO Skill Ontology & NetworkX Graph
-- [ ] Implement ESCO snapshot loader in `packages/ontology/esco_loader.py`.
-- [ ] Implement multi-stage skill alias normalizer (exact, normalized, alias, fuzzy).
-- [ ] Build in-memory NetworkX graph in `packages/graph/skill_graph.py`.
-- [ ] Implement graph features (coverage, related skills, shortest evidence paths).
-- [ ] Write graph unit tests in `tests/unit/test_graph.py`.
-
-### [ ] Phase 6: Multi-Model Retrieval & Decision Engine
-- [ ] Implement common `Ranker` and `DecisionModel` interfaces in `packages/ranking/base.py`.
-- [ ] Implement BM25 lexical ranker (`packages/ranking/bm25_ranker.py`).
-- [ ] Implement MiniLM dense vector retriever (`packages/ranking/dense_ranker.py`).
-- [ ] Implement RRF hybrid fusion (`packages/ranking/rrf_ranker.py`).
-- [ ] Implement Weighted Criterion Scorer (`packages/ranking/weighted_ranker.py`).
-- [ ] Implement TOPSIS multi-criteria decision model (`packages/ranking/topsis_ranker.py`).
-- [ ] Implement LightGBM LambdaMART ranker (`packages/ranking/lambdamart_ranker.py`).
-- [ ] Implement Laya research adapter & verification test suite (`packages/decision_models/laya_adapter.py`).
-- [ ] Write ranking unit and mathematical correctness tests in `tests/unit/test_rankers.py`.
-
-### [ ] Phase 7: Evaluation, Fairness & Research Harness
-- [ ] Implement ranking evaluation metrics (nDCG@k, MRR, Precision@k, Recall@k, latency, peak RAM/VRAM) in `packages/evaluation/`.
-- [ ] Implement counterfactual fairness diagnostics in `packages/fairness/counterfactual.py`.
-- [ ] Implement ablation engine (comparing BM25, MiniLM, RRF, TOPSIS, Ontology vs. No-Ontology).
-- [ ] Generate automated evaluation reports in markdown and JSONL.
-
-### [ ] Phase 8: FastAPI Backend & SQLite Storage
-- [ ] Implement SQLite schema and migration manager in `packages/common/database.py`.
-- [ ] Build FastAPI application in `apps/api/main.py` with typed endpoints:
-  - Resume upload, parsing status, job criteria editor, ranking execution, candidate detail, graph subset, evaluation runs.
-- [ ] Write API integration tests in `tests/api/test_api.py`.
-
-### [ ] Phase 9: Accessible Neumorphic Frontend
-- [ ] Initialize React + Vite + TypeScript in `apps/web/`.
-- [ ] Configure Tailwind CSS with custom Neumorphic soft-UI tokens.
-- [ ] Build UI views: Workspace/Upload, Job Setup, Paginated Ranked Candidates Table, Candidate Detail Drawer, Cytoscape.js Skill Graph Explorer, Model Comparison & Pareto Frontier Lab, Fairness Diagnostics.
-- [ ] Implement Dark/Light mode toggle, visible focus states, and advisory review disclaimer.
-
-### [ ] Phase 10: End-to-End Verification, Benchmarking & Documentation
-- [ ] Run full automated test suite with pytest.
-- [ ] Run complete benchmark suite and record measured metrics on the Intel i7 + RTX 3050.
-- [ ] Update `docs/implementation-status.md`, `README.md`, `THIRD_PARTY_NOTICES.md`, `MODEL_CARDS.md`, and `DATASET_CARDS.md`.
-- [ ] Final sign-off against Definition of Done.
+### 7.5 `EvaluationRun`
+```python
+class EvaluationRun(BaseModel):
+    run_id: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    model_name: str
+    dataset_split: str
+    ndcg_at_5: float
+    ndcg_at_10: float
+    mrr: float
+    precision_at_5: float
+    recall_at_10: float
+    latency_p50_ms: float
+    latency_p95_ms: float
+    peak_ram_mb: float
+    peak_vram_mb: float
+```
 
 ---
 
-## 8. Definition of Done Checklist
+## 8. Multi-Tiered Testing & Deep Edge-Case Architecture
 
-Before marking the project complete, Antigravity must verify:
-- [ ] Clean Windows 11 setup executes without cloud dependencies or paid APIs.
-- [ ] All model weights and caches are located exclusively in `models/weights/` and `models/cache/`.
-- [ ] Every single library, model, ontology, and tool has a dedicated markdown reference in `docs/resources/`.
-- [ ] Every single code file has comprehensive module docstrings, function docs, and inline comments.
-- [ ] UI renders a stunning, accessible Neumorphic theme with WCAG 2.2 AA contrast compliance.
-- [ ] All unit, integration, and API tests pass with zero errors.
-- [ ] Measured latency, memory (RAM/VRAM), and ranking metrics are recorded and published.
+Before any code is approved or pushed to GitHub, Antigravity must execute and verify tests across 5 distinct tiers:
+
+### 8.1 Tier 1: Unit & Mathematical Correctness Tests (`tests/unit/`)
+- **TOPSIS Verification:** Test against Hwang & Yoon (1981) textbook toy example. Validate that Euclidean distances and relative closeness match hand-calculated numbers to within $10^{-6}$.
+- **RRF Verification:** Test rank fusion on known 2-system rankings. Verify that $\sum \frac{1}{60 + r_m}$ produces exact predictable ordering.
+- **BM25 Tokenization:** Verify that technical terms (`C++`, `C#`, `.NET`, `Node.js`, `Vue.js`) are preserved as single tokens and not stripped.
+- **MiniLM Cosine Similarity:** Test orthogonal vectors ($\cos = 0$), identical vectors ($\cos = 1$), and opposite vectors ($\cos = -1$).
+- **NetworkX Graph Traversal:** Test ego-graph extraction, path discovery, and exact skill coverage ratio.
+
+### 8.2 Tier 2: Document Ingestion & Parsing Edge Cases (`tests/integration/test_ingestion_edge_cases.py`)
+- **Corrupted PDF/DOCX:** Ensure malformed files return structured HTTP 422 errors with clean logs without crashing workers.
+- **Scanned (Image-Only) PDF:** Ensure PDF with zero selectable text triggers an explicit `scanned_pdf_detected` warning without failing.
+- **Unicode & Non-Latin Scripts:** Test resumes containing accented characters, umlauts, Cyrillic, and unusual symbols.
+- **File Size Limits:** Test rejection of files $> 10\text{ MB}$.
+- **Duplicate Resumes:** Verify SHA-256 deduplication: uploading the same file with a different filename must return existing cached parsed records immediately.
+
+### 8.3 Tier 3: Model & Hardware Fallbacks (`tests/integration/test_fallbacks.py`)
+- **Missing GGUF Weights:** Ensure system functions 100% in deterministic mock mode when `models/weights/llm/` is empty.
+- **CUDA Unavailable Fallback:** Force `CUDA_VISIBLE_DEVICES=""` and confirm all vector and LLM components cleanly fall back to Intel CPU.
+- **Context Truncation:** Pass 5,000-word resumes and verify section-level chunking prevents context overflow.
+
+### 8.4 Tier 4: Fairness & Counterfactual Diagnostics (`tests/evaluation/test_counterfactual.py`)
+- **Identity Perturbation Suite:** Create synthetic resume pairs where only names, pronouns, and cultural markers differ (e.g. "John Smith" vs. "Jane Smith").
+- Verify that rank shifts ($\Delta \text{rank}$) and Kendall's $\tau$ correlation are tracked and that shortlist boundary crossings are highlighted.
+
+### 8.5 Tier 5: API & End-to-End Contract Tests (`tests/api/test_api.py`)
+- Test complete flow: Upload Resume ➔ Create Job ➔ Trigger Ranking ➔ Fetch Paginated Candidates ➔ Inspect Evidence ➔ Download Markdown Evaluation Report.
+
+---
+
+## 9. GitHub Repository Publication & Release Protocol
+
+When all phases and tests pass, Antigravity must execute the following release protocol:
+
+1. **Security & Secret Audit:**
+   - Execute a regex scan across the entire workspace ensuring zero `.env` files, API keys, passwords, or personal credentials exist.
+   - Verify that `models/weights/` and `models/cache/` contain zero git-tracked binary blobs.
+2. **License & Attribution Inventory (`THIRD_PARTY_NOTICES.md`):**
+   - Generate a complete software bill of materials (SBOM) and license inventory verifying that all direct and transitive dependencies use permissive open-source licenses (MIT, Apache-2.0, BSD-3-Clause, AGPLv3 for PyMuPDF).
+3. **Model & Dataset Cards (`MODEL_CARDS.md` & `DATASET_CARDS.md`):**
+   - Document upstream repositories, revisions, file hashes, context limits, and usage disclaimers.
+4. **GitHub Actions CI Workflow (`.github/workflows/ci.yml`):**
+   - Automated workflow running on `ubuntu-latest` and `windows-latest`:
+     - Python 3.11 setup via `uv`.
+     - Code linting and formatting via `ruff check` and `ruff format --check`.
+     - Full test suite via `pytest tests/ -v`.
+     - Frontend lint and production build via `npm run build`.
+5. **Master `README.md`:**
+   - Features, architecture diagram, quickstart guide, Neumorphic UI screenshots/walkthrough, and human-in-the-loop ethical disclaimer.
+6. **Git Remote Push:**
+   - Connect to the user's new GitHub repository and push main branch with clean initial history.

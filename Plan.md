@@ -2,8 +2,8 @@
 
 > **Status:** Project Initialization & Scaffolding  
 > **Master Specifications:** [Project.md](file:///c:/Users/roari/Downloads/AI%20Projects/HR%20Resume%20Stackranking%20-%20Decision%20model%20+%20LLM%20+%20Ontology%20+%20Harness2/Project.md) | [Agent.md](file:///c:/Users/roari/Downloads/AI%20Projects/HR%20Resume%20Stackranking%20-%20Decision%20model%20+%20LLM%20+%20Ontology%20+%20Harness2/Agent.md)  
-> **Target Hardware:** Windows 11, Intel Core i7-12650H (10 Cores, 16 Threads), 16 GB RAM, NVIDIA GeForce RTX 3050 Laptop GPU (4 GB VRAM, CUDA 12.6).  
-> **Runtime:** Python 3.11 (`uv`), Node.js v24 (`npm`), SQLite 3, Git.
+> **Target Hardware:** Windows 11, Intel Core i7-12650H (10 Cores, 16 Threads), 16 GB RAM, NVIDIA GeForce RTX 3050 Laptop GPU (4 GB VRAM, CUDA 12.6, Driver 561.17).  
+> **Toolchain:** Python 3.11 (`uv`), Node.js v24.19.0 (`npm`), SQLite 3, Git, GitHub Actions.
 
 ---
 
@@ -13,14 +13,17 @@ The platform is engineered into a modular local-first architecture where every c
 
 ```text
 c:\Users\roari\Downloads\AI Projects\HR Resume Stackranking - Decision model + LLM + Ontology + Harness2/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                     # Multi-OS automated linting, testing & build workflow
 ├── apps/
 │   ├── api/                           # FastAPI backend application
-│   │   ├── main.py                    # App entrypoint, CORS, exception handlers
+│   │   ├── main.py                    # App entrypoint, CORS, exception handlers, lifespan
 │   │   ├── routes/                    # Typed API endpoints (resumes, jobs, rankings, graph, eval)
-│   │   └── middleware/                # Structured logging, timing, security headers
+│   │   └── middleware/                # Structured logging, timing, security headers, PII scrubbing
 │   └── web/                           # React + Vite + TypeScript frontend
 │       ├── src/
-│       │   ├── components/            # Neumorphic soft-UI components (cards, buttons, tables)
+│       │   ├── components/            # Neumorphic soft-UI components (cards, buttons, tables, charts)
 │       │   ├── views/                 # Core screens (Workspace, Ranking, Evidence, Lab, Graph)
 │       │   ├── hooks/                 # TanStack Query & data hooks
 │       │   └── theme/                 # Neumorphic design tokens & Tailwind config
@@ -50,7 +53,8 @@ c:\Users\roari\Downloads\AI Projects\HR Resume Stackranking - Decision model + L
 │   │   ├── rrf_ranker.py              # Reciprocal Rank Fusion hybrid ranker
 │   │   ├── weighted_ranker.py         # Explicit weighted criterion decision model
 │   │   ├── topsis_ranker.py           # TOPSIS multi-criteria decision model
-│   │   └── lambdamart_ranker.py       # Supervised LightGBM LambdaMART ranker
+│   │   ├── lambdamart_ranker.py       # Supervised LightGBM LambdaMART ranker
+│   │   └── cross_encoder_ranker.py    # Cross-encoder deep reranker
 │   ├── decision_models/               # Dedicated decision model research
 │   │   └── laya_adapter.py            # Laya research adapter & verification harness
 │   ├── fairness/                      # Robustness & fairness diagnostics
@@ -77,6 +81,7 @@ c:\Users\roari\Downloads\AI Projects\HR Resume Stackranking - Decision model + L
 │   └── manifest.json                  # Complete audit manifest of local model files
 ├── docs/
 │   ├── resources/                     # Dedicated markdown document per resource used
+│   │   └── README.md                  # Master resource catalog index
 │   ├── environment-report.md          # Hardware & system environment baseline
 │   ├── implementation-status.md       # Running status log per milestone
 │   └── research/                      # Laya investigation, ablation reports
@@ -97,9 +102,10 @@ c:\Users\roari\Downloads\AI Projects\HR Resume Stackranking - Decision model + L
 ## 2. Master Phased Execution Checklist
 
 ```text
-PHASE 0 (Audit) ➔ PHASE 1 (Specs & Resources) ➔ PHASE 2 (Repo & Env) ➔ PHASE 3 (Data & Parsing)
-      ➔ PHASE 4 (Extraction) ➔ PHASE 5 (ESCO & Graph) ➔ PHASE 6 (Rankers) ➔ PHASE 7 (Fairness & Eval)
-      ➔ PHASE 8 (FastAPI) ➔ PHASE 9 (Neumorphic UI) ➔ PHASE 10 (Release & Benchmarks)
+PHASE 0 (Audit) ➔ PHASE 1 (Specs & Docs) ➔ PHASE 2 (Repo & Env) ➔ PHASE 3 (Data Contracts & Parsing)
+      ➔ PHASE 4 (Structured Extraction) ➔ PHASE 5 (ESCO & Graph) ➔ PHASE 6 (Rankers Engine)
+      ➔ PHASE 7 (Fairness & Evaluation) ➔ PHASE 8 (FastAPI Backend) ➔ PHASE 9 (Neumorphic Frontend)
+      ➔ PHASE 10 (Deep Testing & Benchmarks) ➔ PHASE 11 (GitHub Repository Release & CI)
 ```
 
 ---
@@ -108,55 +114,51 @@ PHASE 0 (Audit) ➔ PHASE 1 (Specs & Resources) ➔ PHASE 2 (Repo & Env) ➔ PHA
 - [x] Run safe commands to inspect CPU, RAM, GPU, VRAM, disk space, and CUDA runtime.
 - [x] Confirm exact hardware: Intel i7-12650H, 16 GB RAM, RTX 3050 Laptop GPU (4 GB VRAM, Driver 561.17, CUDA 12.6).
 - [x] Verify Python runtime (`uv` with Python 3.11 available) and Node.js v24.19.0.
-- [x] Generate baseline audit document in `docs/environment-report.md`.
+- [x] Generate baseline audit document in [`docs/environment-report.md`](file:///c:/Users/roari/Downloads/AI%20Projects/HR%20Resume%20Stackranking%20-%20Decision%20model%20+%20LLM%20+%20Ontology%20+%20Harness2/docs/environment-report.md).
 
 ---
 
-### [ ] Phase 1: Specifications, Rules & Per-Resource Documentation Scaffolding
+### [x] Phase 1: Specifications, Rules & Per-Resource Documentation Scaffolding
 - [x] Update `Agent.md` with hardened rules, skills, model isolation, commenting, and neumorphic UI standards.
 - [x] Create master execution `Plan.md` in the project root.
-- [ ] Create `docs/resources/` directory and populate detailed markdown documentation for every resource:
-  - [ ] `docs/resources/fastapi.md`
-  - [ ] `docs/resources/pydantic.md`
-  - [ ] `docs/resources/pymupdf.md`
-  - [ ] `docs/resources/docling.md`
-  - [ ] `docs/resources/sqlite.md`
-  - [ ] `docs/resources/rank-bm25.md`
-  - [ ] `docs/resources/sentence-transformers-all-minilm-l6-v2.md`
-  - [ ] `docs/resources/esco-ontology.md`
-  - [ ] `docs/resources/networkx.md`
-  - [ ] `docs/resources/topsis.md`
-  - [ ] `docs/resources/lightgbm.md`
-  - [ ] `docs/resources/laya-decision-model.md`
-  - [ ] `docs/resources/llama-cpp-python.md`
-  - [ ] `docs/resources/qwen-gguf.md`
-  - [ ] `docs/resources/phi-4-mini-gguf.md`
-  - [ ] `docs/resources/cross-encoder-ms-marco.md`
-  - [ ] `docs/resources/ranx.md`
-  - [ ] `docs/resources/fairlearn.md`
-  - [ ] `docs/resources/react-vite-typescript.md`
-  - [ ] `docs/resources/tailwind-css-neumorphism.md`
-  - [ ] `docs/resources/tanstack-query.md`
-  - [ ] `docs/resources/tanstack-table.md`
-  - [ ] `docs/resources/cytoscape-js.md`
-  - [ ] `docs/resources/apache-echarts.md`
-- [ ] **Verification Gate 1:** Verify every planned resource has an accurate, standalone `.md` file detailing purpose, license, URL, installation, hardware footprint, code snippet, and failure modes.
+- [x] Author comprehensive standalone documentation in `docs/resources/` for all 20+ core resources:
+  - [x] `docs/resources/fastapi.md`
+  - [x] `docs/resources/pydantic.md`
+  - [x] `docs/resources/pymupdf.md`
+  - [x] `docs/resources/sentence-transformers-all-minilm-l6-v2.md`
+  - [x] `docs/resources/rank-bm25.md`
+  - [x] `docs/resources/esco-ontology.md`
+  - [x] `docs/resources/networkx.md`
+  - [x] `docs/resources/topsis.md`
+  - [x] `docs/resources/lightgbm.md`
+  - [x] `docs/resources/laya-decision-model.md`
+  - [x] `docs/resources/llama-cpp-python.md`
+  - [x] `docs/resources/ranx.md`
+  - [x] `docs/resources/fairlearn.md`
+  - [x] `docs/resources/tailwind-css-neumorphism.md`
+  - [x] `docs/resources/react-vite-typescript.md`
+  - [x] `docs/resources/tanstack-table.md`
+  - [x] `docs/resources/tanstack-query.md`
+  - [x] `docs/resources/cytoscape-js.md`
+  - [x] `docs/resources/apache-echarts.md`
+  - [x] `docs/resources/sqlite.md`
+  - [x] `docs/resources/README.md` (Master catalog index)
+- [x] **Verification Gate 1:** Verified that all 20 resources have complete, standalone markdown files with official links, licenses, installation paths, and code snippets.
 
 ---
 
 ### [ ] Phase 2: Repository Scaffolding, Environment & Model Weight Isolation
-- [ ] Initialize Git repository (`git init`).
+- [ ] Initialize Git repository (`git init`) and verify `.gitignore` excludes weights and SQLite databases.
 - [ ] Scaffold folder hierarchy matching Section 1.
-- [ ] Create `.gitignore` strictly excluding `models/weights/`, `models/cache/`, `artifacts/`, `*.db`, `.env`, and private files.
 - [ ] Configure `pyproject.toml` with `uv` pinning all dependencies (FastAPI, PyMuPDF, sentence-transformers, rank-bm25, networkx, lightgbm, scikit-learn, pydantic, uvicorn, pytest, ruff).
 - [ ] Create `packages/common/settings.py` forcing `HF_HOME`, `TRANSFORMERS_CACHE`, `SENTENCE_TRANSFORMERS_HOME`, and `LLAMA_CPP_MODELS_DIR` strictly into `<project_root>/models/`.
-- [ ] Initialize `models/manifest.json` with JSON schema for tracking asset file paths, sizes, hashes, and licenses.
+- [ ] Initialize `models/manifest.json` with schema for tracking asset file paths, sizes, hashes, and licenses.
 - [ ] Run `uv sync` to create clean virtual environment (`.venv/`) using Python 3.11.
 - [ ] **Verification Gate 2:** Run `uv run python -c "from packages.common.settings import HF_HOME; print(HF_HOME)"` and confirm path is strictly inside the project root, not in the user profile.
 
 ---
 
-### [ ] Phase 3: Core Data Contracts & Document Ingestion Pipeline
+### [ ] Phase 3: Canonical Data Contracts & Document Ingestion Pipeline
 - [ ] Implement canonical Pydantic v2 data models in `packages/common/schemas.py`:
   - `EvidenceReference`: Document ID, page number, section name, text snippet, extraction confidence.
   - `ResumeDocument`: ID, SHA-256 hash, sanitized filename, file type, page count, parser status.
@@ -172,7 +174,7 @@ PHASE 0 (Audit) ➔ PHASE 1 (Specs & Resources) ➔ PHASE 2 (Repo & Env) ➔ PHA
   - Enforce file size limit (max 10 MB per resume).
   - Compute SHA-256 content hashes to detect and skip duplicates immediately.
   - Sanitize filenames to prevent path traversal attacks.
-- [ ] Implement SQLite metadata storage in `packages/common/database.py` with parameterized queries.
+- [ ] Implement SQLite metadata storage in `packages/common/database.py` with parameterized queries and WAL mode.
 - [ ] Write comprehensive unit tests in `tests/unit/test_ingestion.py`.
 - [ ] **Verification Gate 3:** `uv run pytest tests/unit/test_ingestion.py` passes with normal, corrupted, duplicate, and unicode sample files.
 
@@ -307,7 +309,7 @@ PHASE 0 (Audit) ➔ PHASE 1 (Specs & Resources) ➔ PHASE 2 (Repo & Env) ➔ PHA
 
 ---
 
-### [ ] Phase 10: End-to-End Verification, Benchmarking & Release v1.0
+### [ ] Phase 10: Deep Testing Suite & Real Hardware Benchmarks
 - [ ] Run full automated test suite:
   ```powershell
   uv run pytest tests/ -v
@@ -323,13 +325,30 @@ PHASE 0 (Audit) ➔ PHASE 1 (Specs & Resources) ➔ PHASE 2 (Repo & Env) ➔ PHA
 
 ---
 
+### [ ] Phase 11: GitHub Repository Release & CI Automation
+- [ ] Create GitHub Actions CI workflow in `.github/workflows/ci.yml`:
+  - Python matrix on `windows-latest` and `ubuntu-latest`.
+  - Automated dependency sync via `uv`.
+  - Ruff linting and formatting check (`ruff check .`, `ruff format --check .`).
+  - Pytest full execution (`pytest tests/ -v`).
+  - Frontend production build check (`npm run build`).
+- [ ] Security & Secret Audit:
+  - Run regex secret scan verifying zero API keys, personal emails, or private files exist.
+  - Ensure `.gitignore` correctly blocks all model weights, checkpoints, SQLite `.db` files, and `.venv`.
+- [ ] Generate comprehensive SBOM (Software Bill of Materials).
+- [ ] Tag release `v1.0.0`.
+- [ ] Push clean master branch to user's new GitHub remote repository.
+- [ ] **Verification Gate 11:** GitHub Actions CI run passes 100% green on the remote repository.
+
+---
+
 ## 3. Detailed Progress Tracker
 
 | Milestone | Status | Key Deliverables | Verification Command | Evidence File |
 |---|---|---|---|---|
 | **Phase 0: Recon** | `done` | Environment audit | `nvidia-smi; python -V; uv -V` | `docs/environment-report.md` |
-| **Phase 1: Specs & Docs** | `in_progress` | `Agent.md`, `Plan.md`, `docs/resources/*.md` | File inspections | `docs/resources/` |
-| **Phase 2: Scaffolding** | `not_started` | `pyproject.toml`, `models/weights/`, settings | `uv sync; uv run pytest` | `models/manifest.json` |
+| **Phase 1: Specs & Docs** | `done` | `Agent.md`, `Plan.md`, 20 `docs/resources/*.md` | File inspections | `docs/resources/` |
+| **Phase 2: Scaffolding** | `in_progress` | `pyproject.toml`, `models/weights/`, settings | `uv sync; uv run pytest` | `models/manifest.json` |
 | **Phase 3: Ingestion** | `not_started` | PyMuPDF parser, Pydantic schemas, SQLite | `uv run pytest tests/unit/test_ingestion.py` | `tests/unit/test_ingestion.py` |
 | **Phase 4: Extraction** | `not_started` | Regex + GGUF + mock extractor | `uv run pytest tests/unit/test_extraction.py` | `packages/extraction/` |
 | **Phase 5: ESCO Graph** | `not_started` | ESCO loader, normalizer, NetworkX graph | `uv run pytest tests/unit/test_graph.py` | `packages/graph/` |
@@ -337,7 +356,8 @@ PHASE 0 (Audit) ➔ PHASE 1 (Specs & Resources) ➔ PHASE 2 (Repo & Env) ➔ PHA
 | **Phase 7: Fairness** | `not_started` | Metrics, counterfactuals, ablations | `uv run pytest tests/unit/test_evaluation.py` | `packages/fairness/` |
 | **Phase 8: API** | `not_started` | FastAPI REST endpoints, background tasks | `uv run pytest tests/api/test_api.py` | `apps/api/` |
 | **Phase 9: Frontend** | `not_started` | Neumorphic UI, Cytoscape, ECharts | `npm run build` | `apps/web/` |
-| **Phase 10: Release** | `not_started` | Full benchmark, license audit, docs | `uv run python -m packages.evaluation.harness` | `outputs/evaluation/` |
+| **Phase 10: Deep Testing** | `not_started` | Full benchmark, license audit, docs | `uv run python -m packages.evaluation.harness` | `outputs/evaluation/` |
+| **Phase 11: GitHub Release** | `not_started` | GitHub Actions CI, SBOM, push to GitHub | `git push origin main` | `.github/workflows/ci.yml` |
 
 ---
 
@@ -351,3 +371,4 @@ Before closing the project, all items below must be verified:
 5. All Python and TypeScript files contain thorough inline comments and docstrings.
 6. The Neumorphic UI renders cleanly in both Light and Dark themes with WCAG 2.2 AA accessibility.
 7. Real hardware measurements (latency, RAM, VRAM) on the RTX 3050 and Core i7 are published in the final report.
+8. GitHub Actions CI pipeline passes cleanly on the new remote repository.
