@@ -79,7 +79,7 @@
 
 4. **Launch the FastAPI backend:**
    ```powershell
-   uv run uvicorn apps.api.main:app --reload --host 127.0.0.1 --port 8000
+   uv run uvicorn apps.api.main:app --reload --host 127.0.0.1 --port 8001
    ```
 
 5. **Launch the Neumorphic web interface:**
