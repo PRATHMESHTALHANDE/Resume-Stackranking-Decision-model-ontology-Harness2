@@ -1,0 +1,258 @@
+"""
+Module: packages.common.database
+Description:
+    SQLite database management for the Resume Intelligence Lab.
+    Implements:
+    - Thread-safe SQLite connection factory with Write-Ahead Logging (WAL mode).
+    - Automated schema migrations creating tables for resumes, profiles, jobs, rankings, and runs.
+    - Parameterized database operations preventing SQL injection.
+    - Clean cascading deletion for candidate data minimization.
+
+Author:
+    Resume Intelligence Architect
+"""
+import sqlite3
+import json
+from pathlib import Path
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+
+from packages.common.settings import SQLITE_DB_PATH
+from packages.common.schemas import (
+    ResumeDocument,
+    ResumeProfile,
+    JobDescription,
+    RankingResult,
+    EvaluationRun,
+)
+
+# ==============================================================================
+# 1. Connection Factory (WAL Mode Enabled)
+# ==============================================================================
+def get_connection(db_path: Optional[Path] = None) -> sqlite3.Connection:
+    """
+    Returns an open SQLite database connection configured with WAL journal mode
+    for safe concurrent readers during background document ingestion.
+
+    Args:
+        db_path: Optional custom path (used in unit tests for temporary DBs).
+
+    Returns:
+        sqlite3.Connection with Row row_factory for dict-like column access.
+    """
+    target_path = db_path or SQLITE_DB_PATH
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    conn = sqlite3.connect(str(target_path), timeout=30.0)
+    conn.execute("PRAGMA journal_mode = WAL;")     # Non-blocking concurrent reads
+    conn.execute("PRAGMA synchronous = NORMAL;")    # High performance, crash-safe on SSDs
+    conn.execute("PRAGMA foreign_keys = ON;")      # Enforce referential integrity
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# ==============================================================================
+# 2. Database Schema Initialization & Migrations
+# ==============================================================================
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS resumes (
+    document_id TEXT PRIMARY KEY,
+    content_hash TEXT NOT NULL UNIQUE,
+    source_filename TEXT NOT NULL,
+    file_type TEXT NOT NULL,
+    page_count INTEGER NOT NULL DEFAULT 1,
+    file_size_bytes INTEGER NOT NULL,
+    parser_status TEXT NOT NULL DEFAULT 'pending',
+    warnings_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_resumes_hash ON resumes(content_hash);
+
+CREATE TABLE IF NOT EXISTS parsed_profiles (
+    candidate_id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL UNIQUE,
+    skills_json TEXT NOT NULL DEFAULT '[]',
+    experience_json TEXT NOT NULL DEFAULT '[]',
+    education_json TEXT NOT NULL DEFAULT '[]',
+    total_experience_years REAL NOT NULL DEFAULT 0.0,
+    summary TEXT,
+    uncertainty_json TEXT NOT NULL DEFAULT '[]',
+    extraction_method TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (document_id) REFERENCES resumes(document_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+    job_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description_text TEXT NOT NULL,
+    criteria_json TEXT NOT NULL DEFAULT '[]',
+    minimum_experience_years REAL,
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rankings (
+    ranking_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    candidate_id TEXT NOT NULL,
+    rank INTEGER NOT NULL,
+    score REAL NOT NULL,
+    model_name TEXT NOT NULL,
+    component_scores_json TEXT NOT NULL DEFAULT '{}',
+    evidence_json TEXT NOT NULL DEFAULT '[]',
+    uncertainty_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE,
+    FOREIGN KEY (candidate_id) REFERENCES parsed_profiles(candidate_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_rankings_job_model ON rankings(job_id, model_name);
+CREATE INDEX IF NOT EXISTS idx_rankings_run ON rankings(run_id);
+
+CREATE TABLE IF NOT EXISTS evaluation_runs (
+    run_id TEXT PRIMARY KEY,
+    timestamp TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    dataset_split TEXT NOT NULL,
+    split_hash TEXT NOT NULL,
+    candidate_count INTEGER NOT NULL,
+    query_count INTEGER NOT NULL,
+    ndcg_at_5 REAL NOT NULL,
+    ndcg_at_10 REAL NOT NULL,
+    mrr REAL NOT NULL,
+    precision_at_5 REAL NOT NULL,
+    recall_at_10 REAL NOT NULL,
+    latency_median_ms REAL NOT NULL,
+    latency_p95_ms REAL NOT NULL,
+    candidates_per_second REAL NOT NULL,
+    peak_ram_mb REAL NOT NULL,
+    peak_vram_mb REAL NOT NULL,
+    counterfactual_tau REAL,
+    shortlist_crossings INTEGER
+);
+"""
+
+def init_db(db_path: Optional[Path] = None) -> None:
+    """
+    Initializes all database tables and indexes if they do not exist.
+    """
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.executescript(SCHEMA_SQL)
+    finally:
+        conn.close()
+
+
+# ==============================================================================
+# 3. Parameterized CRUD Data Operations
+# ==============================================================================
+def save_resume_document(doc: ResumeDocument, db_path: Optional[Path] = None) -> None:
+    """Inserts or updates a ResumeDocument record using parameterized SQL."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO resumes (
+                    document_id, content_hash, source_filename, file_type,
+                    page_count, file_size_bytes, parser_status, warnings_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(document_id) DO UPDATE SET
+                    parser_status=excluded.parser_status,
+                    warnings_json=excluded.warnings_json;
+                """,
+                (
+                    doc.document_id,
+                    doc.content_hash,
+                    doc.source_filename,
+                    doc.file_type,
+                    doc.page_count,
+                    doc.file_size_bytes,
+                    doc.parser_status,
+                    json.dumps(doc.warnings),
+                    doc.created_at.isoformat(),
+                ),
+            )
+    finally:
+        conn.close()
+
+
+def get_resume_by_hash(content_hash: str, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Checks for existing document by SHA-256 content hash (instant deduplication)."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute("SELECT * FROM resumes WHERE content_hash = ?;", (content_hash,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def save_parsed_profile(profile: ResumeProfile, db_path: Optional[Path] = None) -> None:
+    """Saves structured candidate profile with JSON serialization of nested collections."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO parsed_profiles (
+                    candidate_id, document_id, skills_json, experience_json,
+                    education_json, total_experience_years, summary, uncertainty_json,
+                    extraction_method, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    profile.candidate_id,
+                    profile.document_id,
+                    json.dumps([s.model_dump() for s in profile.skills]),
+                    json.dumps([e.model_dump() for e in profile.experience_items]),
+                    json.dumps([ed.model_dump() for ed in profile.education_items]),
+                    profile.total_experience_years,
+                    profile.summary,
+                    json.dumps(profile.uncertainty_flags),
+                    profile.extraction_method,
+                    profile.created_at.isoformat(),
+                ),
+            )
+    finally:
+        conn.close()
+
+
+def save_job_description(job: JobDescription, db_path: Optional[Path] = None) -> None:
+    """Saves or updates a Job Description and its review criteria."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO jobs (
+                    job_id, title, description_text, criteria_json,
+                    minimum_experience_years, version, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    job.job_id,
+                    job.title,
+                    job.description_text,
+                    json.dumps([c.model_dump() for c in job.criteria]),
+                    job.minimum_experience_years,
+                    job.version,
+                    job.created_at.isoformat(),
+                ),
+            )
+    finally:
+        conn.close()
+
+
+def delete_resume(document_id: str, db_path: Optional[Path] = None) -> None:
+    """Cascading deletion of resume, extracted profile, and rankings."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute("DELETE FROM resumes WHERE document_id = ?;", (document_id,))
+    finally:
+        conn.close()
