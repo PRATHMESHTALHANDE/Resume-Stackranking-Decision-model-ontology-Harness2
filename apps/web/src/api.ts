@@ -139,6 +139,36 @@ export async function uploadResumeFile(file: File, requisitionId?: string): Prom
   return res.json();
 }
 
+export async function uploadResumesBatch(
+  files: File[],
+  requisitionId?: string
+): Promise<{
+  status: string;
+  total_files: number;
+  success_count: number;
+  failure_count: number;
+  profiles: CandidateProfile[];
+  failures: Array<{ filename: string; error: any }>;
+}> {
+  const formData = new FormData();
+  files.forEach((file) => {
+    formData.append('files', file);
+  });
+  if (requisitionId) {
+    formData.append('requisition_id', requisitionId);
+  }
+  const res = await fetch(`${API_BASE}/resumes/upload-batch`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to batch upload resumes');
+  }
+  return res.json();
+}
+
+
 export async function deleteAllResumes(): Promise<void> {
   const res = await fetch(`${API_BASE}/resumes/`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete all resumes');

@@ -674,11 +674,14 @@ export function App() {
               jobs={jobs}
               selectedJobId={selectedJobId}
               onSelectJobId={setSelectedJobId}
-              onUploadSuccess={(profile) => {
-                setCandidates((prev) => [profile, ...prev]);
+              onOpenCreateJobModal={() => setIsCreateJobOpen(true)}
+              onUploadSuccess={(profileOrProfiles) => {
+                const newProfiles = Array.isArray(profileOrProfiles) ? profileOrProfiles : [profileOrProfiles];
+                setCandidates((prev) => [...newProfiles, ...prev]);
                 setActiveTab('ranking');
               }}
             />
+
           </div>
         )}
       </main>

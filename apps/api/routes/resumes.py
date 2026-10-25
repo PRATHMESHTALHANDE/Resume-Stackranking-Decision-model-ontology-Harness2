@@ -98,6 +98,78 @@ async def upload_resume(
     }
 
 
+@router.post("/upload-batch", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
+async def upload_resumes_batch(
+    files: List[UploadFile] = File(...),
+    requisition_id: Optional[str] = Form(None),
+):
+    """
+    Ingests multiple uploaded PDF or DOCX files in batch against a target requisition_id:
+    1. Validates each file.
+    2. Parses text content using PyMuPDF / DocxParser.
+    3. Deterministically extracts structured candidate profiles.
+    4. Persists each document and candidate profile to SQLite scoped to requisition_id.
+    """
+    successes = []
+    failures = []
+
+    for file in files:
+        filename = file.filename or "unknown.pdf"
+        try:
+            content_bytes = await file.read()
+            is_valid, validation_errors = DocumentValidator.validate_file(filename, content_bytes)
+            if not is_valid:
+                failures.append({"filename": filename, "error": validation_errors})
+                continue
+
+            ext = Path(filename).suffix.lower()
+            doc_id = f"doc_{uuid.uuid4().hex[:8]}"
+            content_hash = compute_sha256(content_bytes)
+
+            if ext == ".pdf":
+                pages, warnings = DocumentParser.parse_pdf_bytes(content_bytes)
+            else:
+                pages, warnings = DocumentParser.parse_docx_bytes(content_bytes)
+
+            full_text = "\n".join([page.get("text", "") for page in pages])
+
+            candidate_id = f"cand_{doc_id[4:]}"
+            profile = DeterministicExtractor.extract_profile(
+                candidate_id=candidate_id,
+                document_id=doc_id,
+                pages_data=pages,
+                combined_text=full_text,
+            )
+            profile.requisition_id = requisition_id
+
+            doc_record = ResumeDocument(
+                document_id=doc_id,
+                content_hash=content_hash,
+                source_filename=filename,
+                file_type=ext.lstrip("."),
+                page_count=len(pages),
+                file_size_bytes=len(content_bytes),
+                parser_status="success",
+                warnings=warnings,
+                requisition_id=requisition_id,
+            )
+            save_resume_document(doc_record)
+            save_parsed_profile(profile)
+            successes.append(profile.model_dump())
+        except Exception as e:
+            failures.append({"filename": filename, "error": str(e)})
+
+    return {
+        "status": "success",
+        "total_files": len(files),
+        "success_count": len(successes),
+        "failure_count": len(failures),
+        "profiles": successes,
+        "failures": failures,
+    }
+
+
+
 @router.post("/", response_model=ResumeProfile, status_code=status.HTTP_201_CREATED)
 def create_profile(profile: ResumeProfile):
     """
