@@ -29,6 +29,7 @@ from packages.ranking.rrf_ranker import RRFRanker
 from packages.ranking.weighted_ranker import WeightedScorer
 from packages.ranking.topsis_ranker import TOPSISRanker
 from packages.ranking.lambdamart_ranker import LambdaMARTRanker
+from packages.ranking.ensemble_ranker import EnsembleSymbiosisRanker
 from packages.decision_models.laya_adapter import LayaDecisionAdapter
 from packages.decision_models.explanation import ExplanationEngine
 
@@ -43,18 +44,23 @@ RANKER_REGISTRY = {
     "topsis": TOPSISRanker,
     "lambdamart": LambdaMARTRanker,
     "laya_adapter": lambda: LayaDecisionAdapter(use_mock=True),
+    "ensemble_symbiosis": EnsembleSymbiosisRanker,
 }
 
 
 class RankingRequest(BaseModel):
     """Payload for triggering a ranking run."""
     model_name: str = Field(
-        default="rrf_hybrid",
-        description="Ranker architecture: 'bm25' | 'dense_minilm' | 'rrf_hybrid' | 'weighted' | 'topsis' | 'lambdamart' | 'laya_adapter'",
+        default="ensemble_symbiosis",
+        description="Ranker architecture: 'bm25' | 'dense_minilm' | 'rrf_hybrid' | 'weighted' | 'topsis' | 'lambdamart' | 'laya_adapter' | 'ensemble_symbiosis'",
     )
     candidate_ids: Optional[List[str]] = Field(
         default=None,
         description="Optional subset of candidate IDs to rank. If None, ranks all in database.",
+    )
+    config: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Dynamic hyperparameter config (e.g. percentage weights for weighted ranker)",
     )
 
 
@@ -92,6 +98,9 @@ def execute_ranking(job_id: str, req: RankingRequest):
     if req.candidate_ids:
         c_set = set(req.candidate_ids)
         candidates = [p for p in all_profiles if p.candidate_id in c_set]
+    elif job.requisition_id:
+        req_profiles = [p for p in all_profiles if p.requisition_id == job.requisition_id]
+        candidates = req_profiles if req_profiles else all_profiles
     else:
         candidates = all_profiles
 
@@ -114,7 +123,7 @@ def execute_ranking(job_id: str, req: RankingRequest):
 
     run_id = f"run_{model_key}_{uuid.uuid4().hex[:8]}"
     t0 = time.perf_counter()
-    results = ranker.rank(job, candidates, run_id=run_id)
+    results = ranker.rank(job, candidates, run_id=run_id, config=req.config)
     latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
 
     # Generate Decision Model and LLM summaries for all ranked candidates

@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS resumes (
     file_size_bytes INTEGER NOT NULL,
     parser_status TEXT NOT NULL DEFAULT 'pending',
     warnings_json TEXT NOT NULL DEFAULT '[]',
+    requisition_id TEXT,
     created_at TEXT NOT NULL
 );
 
@@ -72,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_resumes_hash ON resumes(content_hash);
 CREATE TABLE IF NOT EXISTS parsed_profiles (
     candidate_id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL UNIQUE,
+    requisition_id TEXT,
     skills_json TEXT NOT NULL DEFAULT '[]',
     experience_json TEXT NOT NULL DEFAULT '[]',
     education_json TEXT NOT NULL DEFAULT '[]',
@@ -85,6 +87,7 @@ CREATE TABLE IF NOT EXISTS parsed_profiles (
 
 CREATE TABLE IF NOT EXISTS jobs (
     job_id TEXT PRIMARY KEY,
+    requisition_id TEXT,
     title TEXT NOT NULL,
     description_text TEXT NOT NULL,
     criteria_json TEXT NOT NULL DEFAULT '[]',
@@ -145,13 +148,32 @@ def init_db(db_path: Optional[Path] = None) -> None:
     conn = get_connection(db_path)
     try:
         with conn:
+            # 1. Base table creation
             conn.executescript(SCHEMA_SQL)
-            # Safe schema migrations for existing databases
+
+            # 2. Safe backwards-compatible column migrations for existing databases
+            for tbl in ["jobs", "resumes", "parsed_profiles"]:
+                try:
+                    conn.execute(f"ALTER TABLE {tbl} ADD COLUMN requisition_id TEXT;")
+                except Exception:
+                    pass  # Column already exists
+
             for col in ["decision_summary", "llm_summary"]:
                 try:
                     conn.execute(f"ALTER TABLE rankings ADD COLUMN {col} TEXT;")
                 except Exception:
                     pass  # Column already exists
+
+            # 3. Create indexes safely after ensuring columns exist
+            for idx_stmt in [
+                "CREATE INDEX IF NOT EXISTS idx_resumes_req ON resumes(requisition_id);",
+                "CREATE INDEX IF NOT EXISTS idx_profiles_req ON parsed_profiles(requisition_id);",
+                "CREATE INDEX IF NOT EXISTS idx_jobs_req ON jobs(requisition_id);",
+            ]:
+                try:
+                    conn.execute(idx_stmt)
+                except Exception:
+                    pass
     finally:
         conn.close()
 
@@ -168,11 +190,13 @@ def save_resume_document(doc: ResumeDocument, db_path: Optional[Path] = None) ->
                 """
                 INSERT INTO resumes (
                     document_id, content_hash, source_filename, file_type,
-                    page_count, file_size_bytes, parser_status, warnings_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    page_count, file_size_bytes, parser_status, warnings_json,
+                    requisition_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(document_id) DO UPDATE SET
                     parser_status=excluded.parser_status,
-                    warnings_json=excluded.warnings_json;
+                    warnings_json=excluded.warnings_json,
+                    requisition_id=excluded.requisition_id;
                 """,
                 (
                     doc.document_id,
@@ -183,6 +207,7 @@ def save_resume_document(doc: ResumeDocument, db_path: Optional[Path] = None) ->
                     doc.file_size_bytes,
                     doc.parser_status,
                     json.dumps(doc.warnings),
+                    doc.requisition_id,
                     doc.created_at.isoformat(),
                 ),
             )
@@ -209,14 +234,15 @@ def save_parsed_profile(profile: ResumeProfile, db_path: Optional[Path] = None) 
             conn.execute(
                 """
                 INSERT OR REPLACE INTO parsed_profiles (
-                    candidate_id, document_id, skills_json, experience_json,
+                    candidate_id, document_id, requisition_id, skills_json, experience_json,
                     education_json, total_experience_years, summary, uncertainty_json,
                     extraction_method, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     profile.candidate_id,
                     profile.document_id,
+                    profile.requisition_id,
                     json.dumps([s.model_dump() for s in profile.skills]),
                     json.dumps([e.model_dump() for e in profile.experience_items]),
                     json.dumps([ed.model_dump() for ed in profile.education_items]),
@@ -239,12 +265,13 @@ def save_job_description(job: JobDescription, db_path: Optional[Path] = None) ->
             conn.execute(
                 """
                 INSERT OR REPLACE INTO jobs (
-                    job_id, title, description_text, criteria_json,
+                    job_id, requisition_id, title, description_text, criteria_json,
                     minimum_experience_years, version, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     job.job_id,
+                    job.requisition_id,
                     job.title,
                     job.description_text,
                     json.dumps([c.model_dump() for c in job.criteria]),
@@ -279,14 +306,18 @@ def delete_all_resumes(db_path: Optional[Path] = None) -> None:
         conn.close()
 
 
-def list_resumes(db_path: Optional[Path] = None) -> List[ResumeDocument]:
-    """Retrieves all ingested resume documents."""
+def list_resumes(db_path: Optional[Path] = None, requisition_id: Optional[str] = None) -> List[ResumeDocument]:
+    """Retrieves all ingested resume documents, optionally filtered by requisition_id."""
     conn = get_connection(db_path)
     try:
-        cursor = conn.execute("SELECT * FROM resumes ORDER BY created_at DESC;")
+        if requisition_id:
+            cursor = conn.execute("SELECT * FROM resumes WHERE requisition_id = ? ORDER BY created_at DESC;", (requisition_id,))
+        else:
+            cursor = conn.execute("SELECT * FROM resumes ORDER BY created_at DESC;")
         rows = cursor.fetchall()
         docs = []
         for r in rows:
+            req_id = r["requisition_id"] if "requisition_id" in r.keys() else None
             docs.append(
                 ResumeDocument(
                     document_id=r["document_id"],
@@ -297,6 +328,7 @@ def list_resumes(db_path: Optional[Path] = None) -> List[ResumeDocument]:
                     file_size_bytes=r["file_size_bytes"],
                     parser_status=r["parser_status"],
                     warnings=json.loads(r["warnings_json"]),
+                    requisition_id=req_id,
                     created_at=datetime.fromisoformat(r["created_at"]),
                 )
             )
@@ -313,6 +345,7 @@ def get_resume(document_id: str, db_path: Optional[Path] = None) -> Optional[Res
         r = cursor.fetchone()
         if not r:
             return None
+        req_id = r["requisition_id"] if "requisition_id" in r.keys() else None
         return ResumeDocument(
             document_id=r["document_id"],
             content_hash=r["content_hash"],
@@ -322,24 +355,30 @@ def get_resume(document_id: str, db_path: Optional[Path] = None) -> Optional[Res
             file_size_bytes=r["file_size_bytes"],
             parser_status=r["parser_status"],
             warnings=json.loads(r["warnings_json"]),
+            requisition_id=req_id,
             created_at=datetime.fromisoformat(r["created_at"]),
         )
     finally:
         conn.close()
 
 
-def list_parsed_profiles(db_path: Optional[Path] = None) -> List[ResumeProfile]:
-    """Retrieves all parsed candidate profiles."""
+def list_parsed_profiles(db_path: Optional[Path] = None, requisition_id: Optional[str] = None) -> List[ResumeProfile]:
+    """Retrieves parsed candidate profiles, optionally filtered by requisition_id."""
     conn = get_connection(db_path)
     try:
-        cursor = conn.execute("SELECT * FROM parsed_profiles ORDER BY created_at DESC;")
+        if requisition_id:
+            cursor = conn.execute("SELECT * FROM parsed_profiles WHERE requisition_id = ? ORDER BY created_at DESC;", (requisition_id,))
+        else:
+            cursor = conn.execute("SELECT * FROM parsed_profiles ORDER BY created_at DESC;")
         rows = cursor.fetchall()
         profiles = []
         for r in rows:
+            req_id = r["requisition_id"] if "requisition_id" in r.keys() else None
             profiles.append(
                 ResumeProfile(
                     candidate_id=r["candidate_id"],
                     document_id=r["document_id"],
+                    requisition_id=req_id,
                     skills=json.loads(r["skills_json"]),
                     experience_items=json.loads(r["experience_json"]),
                     education_items=json.loads(r["education_json"]),
@@ -363,9 +402,11 @@ def get_parsed_profile(candidate_id: str, db_path: Optional[Path] = None) -> Opt
         r = cursor.fetchone()
         if not r:
             return None
+        req_id = r["requisition_id"] if "requisition_id" in r.keys() else None
         return ResumeProfile(
             candidate_id=r["candidate_id"],
             document_id=r["document_id"],
+            requisition_id=req_id,
             skills=json.loads(r["skills_json"]),
             experience_items=json.loads(r["experience_json"]),
             education_items=json.loads(r["education_json"]),
@@ -387,9 +428,11 @@ def list_jobs(db_path: Optional[Path] = None) -> List[JobDescription]:
         rows = cursor.fetchall()
         jobs = []
         for r in rows:
+            req_id = r["requisition_id"] if ("requisition_id" in r.keys() and r["requisition_id"]) else f"REQ-{r['job_id'][:6].upper()}"
             jobs.append(
                 JobDescription(
                     job_id=r["job_id"],
+                    requisition_id=req_id,
                     title=r["title"],
                     description_text=r["description_text"],
                     criteria=json.loads(r["criteria_json"]),
@@ -411,8 +454,10 @@ def get_job(job_id: str, db_path: Optional[Path] = None) -> Optional[JobDescript
         r = cursor.fetchone()
         if not r:
             return None
+        req_id = r["requisition_id"] if ("requisition_id" in r.keys() and r["requisition_id"]) else f"REQ-{r['job_id'][:6].upper()}"
         return JobDescription(
             job_id=r["job_id"],
+            requisition_id=req_id,
             title=r["title"],
             description_text=r["description_text"],
             criteria=json.loads(r["criteria_json"]),

@@ -168,6 +168,10 @@ class ResumeDocument(BaseModel):
         default_factory=list,
         description="Non-fatal warnings (e.g. 'scanned_pdf_detected', 'low_text_density')",
     )
+    requisition_id: Optional[str] = Field(
+        None,
+        description="Assigned corporate job requisition number (e.g. 'REQ-2026-001')",
+    )
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -180,6 +184,10 @@ class ResumeProfile(BaseModel):
         description="Anonymized candidate identifier linking to ResumeDocument",
     )
     document_id: str = Field(..., description="Foreign key to source ResumeDocument")
+    requisition_id: Optional[str] = Field(
+        None,
+        description="Assigned corporate job requisition number (e.g. 'REQ-2026-001')",
+    )
     skills: List[ResumeSkill] = Field(default_factory=list)
     experience_items: List[ExperienceItem] = Field(default_factory=list)
     education_items: List[EducationItem] = Field(default_factory=list)
@@ -231,6 +239,10 @@ class JobDescription(BaseModel):
     job_id: str = Field(
         default_factory=lambda: str(uuid.uuid4())[:12],
         description="Unique job identifier",
+    )
+    requisition_id: str = Field(
+        default_factory=lambda: f"REQ-{uuid.uuid4().hex[:6].upper()}",
+        description="Corporate Job Requisition Number (e.g. 'REQ-2026-001')",
     )
     title: str = Field(..., min_length=2, description="Job title")
     description_text: str = Field(..., min_length=10, description="Full job description text")

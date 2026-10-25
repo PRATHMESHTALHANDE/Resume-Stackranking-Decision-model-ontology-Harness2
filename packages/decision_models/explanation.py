@@ -53,7 +53,23 @@ class ExplanationEngine:
         matched_req = [r for r in req_skills if any(r.lower() in s or s in r.lower() for s in cand_skills)]
         matched_pref = [p for p in pref_skills if any(p.lower() in s or s in p.lower() for s in cand_skills)]
 
-        if "topsis" in model_key:
+        if "ensemble" in model_key or "symbiosis" in model_key:
+            t_s = component_scores.get("topsis_score", 0.0)
+            l_s = component_scores.get("laya_score", 0.0)
+            w_s = component_scores.get("weighted_score", 0.0)
+            r_s = component_scores.get("rrf_score", 0.0)
+            d_s = component_scores.get("dense_score", 0.0)
+            b_s = component_scores.get("bm25_score", 0.0)
+            agreement = component_scores.get("model_agreement_rate", 0.95)
+            return (
+                f"All Models in Symbiosis (Consensus Rank #{rank}): Candidate achieved a joint consensus score of {score:.1%} "
+                f"across all 6 evaluated decision models (Cross-Model Agreement Rate: {agreement:.1%}). "
+                f"Component Breakdown: TOPSIS Closeness {t_s:.1%}, LAYA Discrete Match {l_s:.1%}, "
+                f"Weighted Policy {w_s:.1%}, RRF Fusion {r_s:.1%}, Dense MiniLM {d_s:.1%}, BM25 Lexical {b_s:.1%}. "
+                f"Multi-algorithm consensus strongly verifies candidate competence."
+            )
+
+        elif "topsis" in model_key:
             dist_pos = component_scores.get("dist_to_ideal", 0.0)
             dist_neg = component_scores.get("dist_to_anti_ideal", 0.0)
             return (

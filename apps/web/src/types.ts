@@ -37,6 +37,7 @@ export interface EducationItem {
 export interface CandidateProfile {
   candidate_id: string;
   document_id: string;
+  requisition_id?: string | null;
   skills: ResumeSkill[];
   experience_items: ExperienceItem[];
   education_items: EducationItem[];
@@ -57,12 +58,19 @@ export interface JobCriterion {
 
 export interface JobDescription {
   job_id: string;
+  requisition_id?: string;
   title: string;
   description_text: string;
   criteria: JobCriterion[];
   minimum_experience_years?: number | null;
   version: number;
   created_at: string;
+}
+
+export interface RankingConfig {
+  criteria_weight_pct?: number;
+  experience_weight_pct?: number;
+  [key: string]: any;
 }
 
 export interface RankingResult {

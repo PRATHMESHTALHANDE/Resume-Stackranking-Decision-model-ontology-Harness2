@@ -9,6 +9,9 @@ interface CreateJobModalProps {
 }
 
 export function CreateJobModal({ isOpen, onClose, onJobCreated }: CreateJobModalProps) {
+  const [requisitionId, setRequisitionId] = useState(
+    `REQ-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+  );
   const [title, setTitle] = useState('');
   const [descriptionText, setDescriptionText] = useState('');
   const [minExpYears, setMinExpYears] = useState<number>(3.0);
@@ -69,6 +72,7 @@ export function CreateJobModal({ isOpen, onClose, onJobCreated }: CreateJobModal
 
     const newJob: Partial<JobDescription> = {
       job_id: jobId,
+      requisition_id: requisitionId.trim() || `REQ-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
       title: title.trim(),
       description_text: descriptionText.trim(),
       minimum_experience_years: Number(minExpYears),
@@ -110,7 +114,7 @@ export function CreateJobModal({ isOpen, onClose, onJobCreated }: CreateJobModal
                 Create Target Job Description
               </h2>
               <p className="text-xs text-slate-500">
-                Define target role specifications and weighted criteria for stackranking.
+                Define corporate requisition number, target role specifications, and weighted criteria.
               </p>
             </div>
           </div>
@@ -129,8 +133,21 @@ export function CreateJobModal({ isOpen, onClose, onJobCreated }: CreateJobModal
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* Title & Min Experience */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Requisition ID, Title & Min Experience */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="md:col-span-1 flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Requisition ID *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="REQ-2026-001"
+                value={requisitionId}
+                onChange={(e) => setRequisitionId(e.target.value.toUpperCase())}
+                className="neu-input px-3 py-2 text-xs font-mono font-bold text-indigo-500 dark:text-indigo-400 placeholder:text-slate-400"
+              />
+            </div>
             <div className="md:col-span-2 flex flex-col gap-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                 Job Role / Title *
@@ -144,9 +161,9 @@ export function CreateJobModal({ isOpen, onClose, onJobCreated }: CreateJobModal
                 className="neu-input px-3 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="md:col-span-1 flex flex-col gap-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                Min Experience (Yrs)
+                Min Exp (Yrs)
               </label>
               <input
                 type="number"

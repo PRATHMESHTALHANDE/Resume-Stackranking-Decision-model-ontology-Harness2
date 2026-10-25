@@ -111,6 +111,18 @@ def test_ranking_execution(client):
     assert res_rrf.status_code == 200
     assert res_rrf.json()["model_name"] == "rrf_hybrid"
 
+    # 2b. Rank with All Models in Symbiosis (ensemble_symbiosis)
+    payload_ensemble = {
+        "model_name": "ensemble_symbiosis",
+        "config": {"criteria_weight_pct": 75.0, "experience_weight_pct": 25.0},
+    }
+    res_ens = client.post("/api/v1/rankings/job_senior_python_lead/rank", json=payload_ensemble)
+    assert res_ens.status_code == 200
+    ens_data = res_ens.json()
+    assert ens_data["model_name"] == "ensemble_symbiosis"
+    assert len(ens_data["rankings"]) > 0
+    assert "Symbiosis" in ens_data["rankings"][0]["decision_summary"]
+
     # 3. Retrieve run by run_id
     run_id = data["run_id"]
     res_run = client.get(f"/api/v1/rankings/runs/{run_id}")

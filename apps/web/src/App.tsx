@@ -14,6 +14,9 @@ import {
   ChevronDown,
   ChevronUp,
   BrainCircuit,
+  HelpCircle,
+  Filter,
+  Tag,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { EvidenceDrawer } from './components/EvidenceDrawer';
@@ -22,6 +25,8 @@ import { FairnessLab } from './components/FairnessLab';
 import { ResumeUploader } from './components/ResumeUploader';
 import { CreateJobModal } from './components/CreateJobModal';
 import { TopCandidateSpotlight } from './components/TopCandidateSpotlight';
+import { ModelGuideModal } from './components/ModelGuideModal';
+import { WeightedConfigurator } from './components/WeightedConfigurator';
 import {
   fetchHealth,
   fetchJobs,
@@ -47,12 +52,16 @@ export function App() {
   const [selectedJobId, setSelectedJobId] = useState<string>('');
   const [candidates, setCandidates] = useState<CandidateProfile[]>([]);
   const [rankings, setRankings] = useState<RankingResult[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('rrf_hybrid');
+  const [selectedModel, setSelectedModel] = useState<string>('ensemble_symbiosis');
   const [rankingLoading, setRankingLoading] = useState(false);
   const [activeCandidateForDrawer, setActiveCandidateForDrawer] = useState<CandidateProfile | null>(null);
   const [activeRankingForDrawer, setActiveRankingForDrawer] = useState<RankingResult | null>(null);
   const [selectedGraphCandidateId, setSelectedGraphCandidateId] = useState<string | undefined>(undefined);
   const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
+  const [isModelGuideOpen, setIsModelGuideOpen] = useState(false);
+  const [weightedCriteriaPct, setWeightedCriteriaPct] = useState(80);
+  const [weightedExpPct, setWeightedExpPct] = useState(20);
+  const [filterByReqId, setFilterByReqId] = useState(true);
   const [expandedCandidateId, setExpandedCandidateId] = useState<string | null>(null);
 
   // Sync dark mode class with root html
@@ -97,7 +106,11 @@ export function App() {
     if (!currentJob) return;
     setRankingLoading(true);
     try {
-      const res = await executeRanking(currentJob.job_id, selectedModel);
+      const config = {
+        criteria_weight_pct: weightedCriteriaPct,
+        experience_weight_pct: weightedExpPct,
+      };
+      const res = await executeRanking(currentJob.job_id, selectedModel, undefined, config);
       setRankings(res.rankings);
     } catch (err: any) {
       alert(`Ranking failed: ${err.message || 'Please check candidate pool.'}`);
@@ -231,17 +244,24 @@ export function App() {
                 <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                        Active Job Description ({jobs.length} Available)
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                          Active Job Description ({jobs.length} Available)
+                        </span>
+                        {currentJob.requisition_id && (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                            REQ: {currentJob.requisition_id}
+                          </span>
+                        )}
+                      </div>
                       <select
                         value={selectedJobId}
                         onChange={(e) => setSelectedJobId(e.target.value)}
-                        className="neu-input px-3.5 py-2 text-xs font-black text-slate-800 dark:text-slate-100 cursor-pointer min-w-[260px]"
+                        className="neu-input px-3.5 py-2 text-xs font-black text-slate-800 dark:text-slate-100 cursor-pointer min-w-[280px]"
                       >
                         {jobs.map((j) => (
                           <option key={j.job_id} value={j.job_id}>
-                            {j.title} (min {j.minimum_experience_years || 0} yrs)
+                            {j.requisition_id ? `[${j.requisition_id}] ` : ''}{j.title} (min {j.minimum_experience_years || 0} yrs)
                           </option>
                         ))}
                       </select>
@@ -283,22 +303,44 @@ export function App() {
                   {/* Model Selector & Run Ranking */}
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                        Decision / Ranking Model
-                      </span>
-                      <select
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value)}
-                        className="neu-input px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
-                      >
-                        <option value="topsis">TOPSIS Ideal-Point (Decision Model)</option>
-                        <option value="weighted">Weighted Multi-Feature (Decision Model)</option>
-                        <option value="laya_adapter">LAYA Discrete Criterion Adapter</option>
-                        <option value="lambdamart">LambdaMART (Learning to Rank)</option>
-                        <option value="rrf_hybrid">RRF Hybrid (Lexical + Semantic)</option>
-                        <option value="dense_minilm">Dense MiniLM-L6-v2</option>
-                        <option value="bm25">BM25 (Sparse Lexical)</option>
-                      </select>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          Decision / Ranking Model
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsModelGuideOpen(true)}
+                          className="flex items-center gap-1 text-[11px] font-bold text-indigo-500 dark:text-indigo-400 hover:text-indigo-300 transition-colors"
+                          title="Click to view Detailed Breakdown: When to Pick Which Model"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" />
+                          <span>When to Pick Which Model?</span>
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={selectedModel}
+                          onChange={(e) => setSelectedModel(e.target.value)}
+                          className="neu-input px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex-1 min-w-[260px]"
+                        >
+                          <option value="ensemble_symbiosis">🌟 All Models in Symbiosis (Consensus)</option>
+                          <option value="weighted">🎚️ Weighted Multi-Feature (Custom % Weights)</option>
+                          <option value="topsis">📐 TOPSIS Ideal-Point (Decision Model)</option>
+                          <option value="laya_adapter">⚖️ LAYA Discrete Criterion Adapter</option>
+                          <option value="lambdamart">🌲 LambdaMART (Learning to Rank)</option>
+                          <option value="rrf_hybrid">🔀 RRF Hybrid (Lexical + Semantic)</option>
+                          <option value="dense_minilm">🧠 Dense MiniLM-L6-v2 (Vector Semantic)</option>
+                          <option value="bm25">🔤 BM25 (Sparse Lexical Keyword)</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setIsModelGuideOpen(true)}
+                          className="neu-button p-2 text-indigo-500 dark:text-indigo-400 hover:text-indigo-300 rounded-lg shrink-0"
+                          title="Detailed Breakdown: When to Pick Which Model"
+                        >
+                          <HelpCircle className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
                     <button
@@ -311,6 +353,18 @@ export function App() {
                     </button>
                   </div>
                 </div>
+
+                {/* Weighted Multi-Feature Policy Sliders (displayed when Weighted is selected) */}
+                {selectedModel === 'weighted' && (
+                  <WeightedConfigurator
+                    criteriaPct={weightedCriteriaPct}
+                    experiencePct={weightedExpPct}
+                    onChange={(crit, exp) => {
+                      setWeightedCriteriaPct(crit);
+                      setWeightedExpPct(exp);
+                    }}
+                  />
+                )}
 
                 {/* JD Summary & Criteria Chips */}
                 <div className="flex flex-col gap-3">
@@ -353,10 +407,32 @@ export function App() {
             {/* Candidate Review Queue Table */}
             <div className="neu-flat p-6 flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                  <Award className="w-4 h-4 text-blue-500" />
-                  Candidate Queue ({rankings.length > 0 ? `${rankings.length} Ranked for ${currentJob.title}` : `${candidates.length} Ingested`})
-                </h3>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <Award className="w-4 h-4 text-blue-500" />
+                    Candidate Queue ({rankings.length > 0 ? `${rankings.length} Ranked for ${currentJob.title}` : `${(filterByReqId && currentJob?.requisition_id ? candidates.filter((c) => c.requisition_id === currentJob.requisition_id) : candidates).length} Ingested`})
+                  </h3>
+
+                  {currentJob?.requisition_id && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterByReqId(!filterByReqId)}
+                      className={`neu-button px-2.5 py-1 text-xs rounded-lg flex items-center gap-1.5 transition-all ${
+                        filterByReqId
+                          ? 'text-indigo-400 font-bold neu-inset'
+                          : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                      title="Toggle filtering candidates scoped to this job requisition"
+                    >
+                      <Filter className="w-3.5 h-3.5" />
+                      <span>
+                        {filterByReqId
+                          ? `Filtered: REQ ${currentJob.requisition_id}`
+                          : `All Pool (${candidates.length})`}
+                      </span>
+                    </button>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-3">
                   {candidates.length > 0 && (
@@ -412,8 +488,16 @@ export function App() {
                               </td>
 
                               {/* Candidate ID */}
-                              <td className="py-3.5 font-bold text-slate-800 dark:text-slate-200">
-                                {r.candidate_id}
+                              <td className="py-3.5">
+                                <span className="font-bold text-slate-800 dark:text-slate-200">
+                                  {r.candidate_id}
+                                </span>
+                                {cand?.requisition_id && (
+                                  <div className="flex items-center gap-1 text-[10px] text-indigo-400 font-mono mt-0.5">
+                                    <Tag className="w-3 h-3" />
+                                    <span>{cand.requisition_id}</span>
+                                  </div>
+                                )}
                               </td>
 
                               {/* Match Score */}
@@ -587,6 +671,9 @@ export function App() {
               )}
             </div>
             <ResumeUploader
+              jobs={jobs}
+              selectedJobId={selectedJobId}
+              onSelectJobId={setSelectedJobId}
               onUploadSuccess={(profile) => {
                 setCandidates((prev) => [profile, ...prev]);
                 setActiveTab('ranking');
@@ -615,6 +702,13 @@ export function App() {
           setSelectedJobId(newJob.job_id);
           setRankings([]);
         }}
+      />
+
+      {/* Decision Model Selection Guide Modal */}
+      <ModelGuideModal
+        isOpen={isModelGuideOpen}
+        onClose={() => setIsModelGuideOpen(false)}
+        onSelectModel={(modelKey) => setSelectedModel(modelKey)}
       />
     </div>
   );

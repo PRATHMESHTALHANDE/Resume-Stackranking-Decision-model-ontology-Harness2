@@ -31,6 +31,17 @@ class WeightedScorer(BaseRanker):
         weights = [c.weight for c in job.criteria]
         total_weight = sum(weights) if sum(weights) > 0 else 1.0
 
+        cfg = config or {}
+        raw_crit_pct = float(cfg.get("criteria_weight_pct", 80.0))
+        raw_exp_pct = float(cfg.get("experience_weight_pct", 20.0))
+        total_raw = raw_crit_pct + raw_exp_pct
+        if total_raw > 0:
+            criteria_weight = raw_crit_pct / total_raw
+            experience_weight = raw_exp_pct / total_raw
+        else:
+            criteria_weight = 0.80
+            experience_weight = 0.20
+
         candidate_scores = []
 
         for cand in candidates:
@@ -77,10 +88,16 @@ class WeightedScorer(BaseRanker):
             else:
                 exp_ratio = 1.0
                 
-            criterion_breakdown["experience_ratio"] = exp_ratio
+            criterion_ratio = weighted_sum / total_weight
+            criterion_breakdown["experience_ratio"] = round(exp_ratio, 4)
+            criterion_breakdown["criteria_score"] = round(criterion_ratio, 4)
+            criterion_breakdown["req_coverage"] = round(criterion_ratio, 4)
+            criterion_breakdown["exp_score"] = round(exp_ratio, 4)
+            criterion_breakdown["criteria_weight_pct"] = round(criteria_weight * 100.0, 1)
+            criterion_breakdown["experience_weight_pct"] = round(experience_weight * 100.0, 1)
 
-            # Final composite score: 85% criteria match + 15% experience alignment
-            final_score = 0.85 * (weighted_sum / total_weight) + 0.15 * exp_ratio
+            # Dynamic composite score using configured percentage weights
+            final_score = criteria_weight * criterion_ratio + experience_weight * exp_ratio
 
             candidate_scores.append((cand.candidate_id, final_score, criterion_breakdown, supporting_citations, uncertainty_markers))
 

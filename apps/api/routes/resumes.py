@@ -11,7 +11,7 @@ deterministic entity normalization, profile persistence, and data minimization.
 import uuid
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Form, Query, HTTPException, status
 
 from packages.common.schemas import ResumeDocument, ResumeProfile
 from packages.common.database import (
@@ -32,13 +32,16 @@ router = APIRouter(prefix="/resumes", tags=["Resumes & Candidates"])
 
 
 @router.post("/upload", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
-async def upload_resume(file: UploadFile = File(...)):
+async def upload_resume(
+    file: UploadFile = File(...),
+    requisition_id: Optional[str] = Form(None),
+):
     """
     Ingests an uploaded PDF or DOCX file:
     1. Validates magic bytes, size limits, and extension.
     2. Parses text content using PyMuPDF or DocxParser.
     3. Deterministically extracts skills, experience, education, and verbatim evidence citations.
-    4. Persists the document metadata and structured candidate profile to SQLite.
+    4. Persists the document metadata and structured candidate profile to SQLite scoped to requisition_id.
     """
     filename = file.filename or "unknown.pdf"
     content_bytes = await file.read()
@@ -71,6 +74,7 @@ async def upload_resume(file: UploadFile = File(...)):
         pages_data=pages,
         combined_text=full_text,
     )
+    profile.requisition_id = requisition_id
 
     # 4. Persistence
     doc_record = ResumeDocument(
@@ -82,6 +86,7 @@ async def upload_resume(file: UploadFile = File(...)):
         file_size_bytes=len(content_bytes),
         parser_status="success",
         warnings=warnings,
+        requisition_id=requisition_id,
     )
     save_resume_document(doc_record)
     save_parsed_profile(profile)
@@ -103,11 +108,12 @@ def create_profile(profile: ResumeProfile):
 
 
 @router.get("/", response_model=List[ResumeProfile])
-def get_all_candidates():
+def get_all_candidates(requisition_id: Optional[str] = Query(None)):
     """
-    Retrieves all candidate profiles stored in the local SQLite database.
+    Retrieves all candidate profiles stored in the local SQLite database,
+    optionally filtered by corporate job requisition number.
     """
-    return list_parsed_profiles()
+    return list_parsed_profiles(requisition_id=requisition_id)
 
 
 @router.get("/{candidate_id}", response_model=ResumeProfile)

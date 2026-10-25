@@ -20,8 +20,11 @@ export async function fetchJobs(): Promise<JobDescription[]> {
   return res.json();
 }
 
-export async function fetchCandidates(): Promise<CandidateProfile[]> {
-  const res = await fetch(`${API_BASE}/resumes/`);
+export async function fetchCandidates(requisitionId?: string): Promise<CandidateProfile[]> {
+  const url = requisitionId
+    ? `${API_BASE}/resumes/?requisition_id=${encodeURIComponent(requisitionId)}`
+    : `${API_BASE}/resumes/`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch candidates');
   return res.json();
 }
@@ -29,7 +32,8 @@ export async function fetchCandidates(): Promise<CandidateProfile[]> {
 export async function executeRanking(
   jobId: string,
   modelName: string,
-  candidateIds?: string[]
+  candidateIds?: string[],
+  config?: Record<string, any>
 ): Promise<{
   run_id: string;
   job_id: string;
@@ -42,7 +46,7 @@ export async function executeRanking(
   const res = await fetch(`${API_BASE}/rankings/${jobId}/rank`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model_name: modelName, candidate_ids: candidateIds }),
+    body: JSON.stringify({ model_name: modelName, candidate_ids: candidateIds, config: config || {} }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -114,13 +118,16 @@ export async function auditFairness(
   return res.json();
 }
 
-export async function uploadResumeFile(file: File): Promise<{
+export async function uploadResumeFile(file: File, requisitionId?: string): Promise<{
   status: string;
   document: any;
   profile: CandidateProfile;
 }> {
   const formData = new FormData();
   formData.append('file', file);
+  if (requisitionId) {
+    formData.append('requisition_id', requisitionId);
+  }
   const res = await fetch(`${API_BASE}/resumes/upload`, {
     method: 'POST',
     body: formData,
