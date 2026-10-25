@@ -20,6 +20,8 @@ from packages.common.database import (
     list_parsed_profiles,
     save_ranking_results,
     get_rankings_by_run,
+    get_latest_rankings_for_job,
+    delete_rankings_for_job,
 )
 from packages.ranking.bm25_ranker import BM25Ranker
 from packages.ranking.dense_ranker import DenseRanker
@@ -28,6 +30,7 @@ from packages.ranking.weighted_ranker import WeightedScorer
 from packages.ranking.topsis_ranker import TOPSISRanker
 from packages.ranking.lambdamart_ranker import LambdaMARTRanker
 from packages.decision_models.laya_adapter import LayaDecisionAdapter
+from packages.decision_models.explanation import ExplanationEngine
 
 router = APIRouter(prefix="/rankings", tags=["Ranking Engine"])
 
@@ -114,6 +117,27 @@ def execute_ranking(job_id: str, req: RankingRequest):
     results = ranker.rank(job, candidates, run_id=run_id)
     latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
 
+    # Generate Decision Model and LLM summaries for all ranked candidates
+    cand_map = {c.candidate_id: c for c in candidates}
+    for r in results:
+        cand = cand_map.get(r.candidate_id)
+        if cand:
+            r.decision_summary = ExplanationEngine.generate_decision_summary(
+                model_name=model_key,
+                rank=r.rank,
+                score=r.score,
+                component_scores=r.component_scores,
+                candidate=cand,
+                job=job,
+            )
+            r.llm_summary = ExplanationEngine.generate_llm_summary(
+                rank=r.rank,
+                score=r.score,
+                candidate=cand,
+                job=job,
+                decision_summary=r.decision_summary,
+            )
+
     # Save to DB
     save_ranking_results(results)
 
@@ -125,6 +149,35 @@ def execute_ranking(job_id: str, req: RankingRequest):
         latency_ms=latency_ms,
         rankings=results,
     )
+
+
+@router.get("/job/{job_id}/latest", response_model=List[RankingResult])
+def get_latest_job_rankings(job_id: str):
+    """
+    Retrieves the most recent stackranking results for a specific job description.
+    """
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job description '{job_id}' not found.",
+        )
+    return get_latest_rankings_for_job(job_id)
+
+
+@router.delete("/job/{job_id}", status_code=status.HTTP_200_OK)
+def clear_job_rankings(job_id: str):
+    """
+    Clears all stackranking results for a specific job without deleting the job itself.
+    """
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job description '{job_id}' not found.",
+        )
+    delete_rankings_for_job(job_id)
+    return {"status": "cleared", "job_id": job_id}
 
 
 @router.get("/runs/{run_id}", response_model=List[RankingResult])

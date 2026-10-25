@@ -104,6 +104,8 @@ CREATE TABLE IF NOT EXISTS rankings (
     component_scores_json TEXT NOT NULL DEFAULT '{}',
     evidence_json TEXT NOT NULL DEFAULT '[]',
     uncertainty_json TEXT NOT NULL DEFAULT '[]',
+    decision_summary TEXT,
+    llm_summary TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE,
     FOREIGN KEY (candidate_id) REFERENCES parsed_profiles(candidate_id) ON DELETE CASCADE
@@ -137,12 +139,19 @@ CREATE TABLE IF NOT EXISTS evaluation_runs (
 
 def init_db(db_path: Optional[Path] = None) -> None:
     """
-    Initializes all database tables and indexes if they do not exist.
+    Initializes all database tables and indexes if they do not exist,
+    and applies backwards-compatible column migrations.
     """
     conn = get_connection(db_path)
     try:
         with conn:
             conn.executescript(SCHEMA_SQL)
+            # Safe schema migrations for existing databases
+            for col in ["decision_summary", "llm_summary"]:
+                try:
+                    conn.execute(f"ALTER TABLE rankings ADD COLUMN {col} TEXT;")
+                except Exception:
+                    pass  # Column already exists
     finally:
         conn.close()
 
@@ -254,6 +263,18 @@ def delete_resume(document_id: str, db_path: Optional[Path] = None) -> None:
     try:
         with conn:
             conn.execute("DELETE FROM resumes WHERE document_id = ?;", (document_id,))
+    finally:
+        conn.close()
+
+
+def delete_all_resumes(db_path: Optional[Path] = None) -> None:
+    """Cascading deletion of all uploaded resumes, candidate profiles, and candidate rankings."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute("DELETE FROM rankings;")
+            conn.execute("DELETE FROM parsed_profiles;")
+            conn.execute("DELETE FROM resumes;")
     finally:
         conn.close()
 
@@ -414,7 +435,7 @@ def delete_job(job_id: str, db_path: Optional[Path] = None) -> None:
 
 
 def save_ranking_results(results: List[RankingResult], db_path: Optional[Path] = None) -> None:
-    """Saves a batch of ranking results for a run."""
+    """Saves a batch of ranking results for a run, including decision and LLM summaries."""
     conn = get_connection(db_path)
     try:
         with conn:
@@ -422,8 +443,9 @@ def save_ranking_results(results: List[RankingResult], db_path: Optional[Path] =
                 """
                 INSERT INTO rankings (
                     run_id, job_id, candidate_id, rank, score, model_name,
-                    component_scores_json, evidence_json, uncertainty_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    component_scores_json, evidence_json, uncertainty_json,
+                    decision_summary, llm_summary, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 [
                     (
@@ -436,6 +458,8 @@ def save_ranking_results(results: List[RankingResult], db_path: Optional[Path] =
                         json.dumps(res.component_scores),
                         json.dumps([e.model_dump() for e in res.evidence_citations]),
                         json.dumps(res.uncertainty_markers),
+                        res.decision_summary,
+                        res.llm_summary,
                         res.created_at.isoformat(),
                     )
                     for res in results
@@ -456,6 +480,7 @@ def get_rankings_by_run(run_id: str, db_path: Optional[Path] = None) -> List[Ran
         rows = cursor.fetchall()
         results = []
         for r in rows:
+            keys = r.keys()
             results.append(
                 RankingResult(
                     candidate_id=r["candidate_id"],
@@ -466,11 +491,39 @@ def get_rankings_by_run(run_id: str, db_path: Optional[Path] = None) -> List[Ran
                     component_scores=json.loads(r["component_scores_json"]),
                     evidence_citations=json.loads(r["evidence_json"]),
                     uncertainty_markers=json.loads(r["uncertainty_json"]),
+                    decision_summary=r["decision_summary"] if "decision_summary" in keys else None,
+                    llm_summary=r["llm_summary"] if "llm_summary" in keys else None,
                     run_id=r["run_id"],
                     created_at=datetime.fromisoformat(r["created_at"]),
                 )
             )
         return results
+    finally:
+        conn.close()
+
+
+def get_latest_rankings_for_job(job_id: str, db_path: Optional[Path] = None) -> List[RankingResult]:
+    """Retrieves the most recent ranking run results for a specific job."""
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute(
+            "SELECT run_id FROM rankings WHERE job_id = ? ORDER BY created_at DESC LIMIT 1;",
+            (job_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return []
+        return get_rankings_by_run(row["run_id"], db_path)
+    finally:
+        conn.close()
+
+
+def delete_rankings_for_job(job_id: str, db_path: Optional[Path] = None) -> None:
+    """Clears all ranking results for a specific job without deleting the job itself."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute("DELETE FROM rankings WHERE job_id = ?;", (job_id,))
     finally:
         conn.close()
 

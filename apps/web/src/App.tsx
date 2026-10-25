@@ -8,17 +8,29 @@ import {
   AlertCircle,
   FileText,
   Sparkles,
+  Plus,
+  Trash2,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  BrainCircuit,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { EvidenceDrawer } from './components/EvidenceDrawer';
 import { GraphViewer } from './components/GraphViewer';
 import { FairnessLab } from './components/FairnessLab';
 import { ResumeUploader } from './components/ResumeUploader';
+import { CreateJobModal } from './components/CreateJobModal';
+import { TopCandidateSpotlight } from './components/TopCandidateSpotlight';
 import {
   fetchHealth,
   fetchJobs,
   fetchCandidates,
   executeRanking,
+  deleteJob,
+  deleteRankingsForJob,
+  fetchLatestRankingForJob,
+  deleteAllResumes,
 } from './api';
 import type {
   SystemHealth,
@@ -40,6 +52,8 @@ export function App() {
   const [activeCandidateForDrawer, setActiveCandidateForDrawer] = useState<CandidateProfile | null>(null);
   const [activeRankingForDrawer, setActiveRankingForDrawer] = useState<RankingResult | null>(null);
   const [selectedGraphCandidateId, setSelectedGraphCandidateId] = useState<string | undefined>(undefined);
+  const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
+  const [expandedCandidateId, setExpandedCandidateId] = useState<string | null>(null);
 
   // Sync dark mode class with root html
   useEffect(() => {
@@ -60,20 +74,78 @@ export function App() {
     fetchCandidates().then(setCandidates).catch(console.error);
   }, []);
 
+  // Fetch latest rankings whenever selected Job changes
+  useEffect(() => {
+    if (selectedJobId) {
+      fetchLatestRankingForJob(selectedJobId)
+        .then((data) => {
+          setRankings(data || []);
+        })
+        .catch(() => setRankings([]));
+    }
+  }, [selectedJobId]);
+
   // Current active job
   const currentJob = jobs.find((j) => j.job_id === selectedJobId) || jobs[0];
 
-  // Execute ranking
+  // Top candidate for spotlight
+  const topRanking = rankings.find((r) => r.rank === 1);
+  const topCandidate = topRanking ? candidates.find((c) => c.candidate_id === topRanking.candidate_id) : null;
+
+  // Execute ranking for currently selected JD
   const handleExecuteRanking = async () => {
     if (!currentJob) return;
     setRankingLoading(true);
     try {
       const res = await executeRanking(currentJob.job_id, selectedModel);
       setRankings(res.rankings);
-    } catch (err) {
-      console.error('Ranking failed:', err);
+    } catch (err: any) {
+      alert(`Ranking failed: ${err.message || 'Please check candidate pool.'}`);
     } finally {
       setRankingLoading(false);
+    }
+  };
+
+  // Clear rankings for the current JD
+  const handleClearRankings = async () => {
+    if (!currentJob) return;
+    if (!window.confirm(`Clear all stackrank results for "${currentJob.title}"?`)) return;
+    try {
+      await deleteRankingsForJob(currentJob.job_id);
+      setRankings([]);
+    } catch (err: any) {
+      alert(`Failed to clear rankings: ${err.message}`);
+    }
+  };
+
+  // Delete current JD
+  const handleDeleteJob = async () => {
+    if (!currentJob) return;
+    if (jobs.length <= 1) {
+      alert("Cannot delete the only job description. Please create another JD first.");
+      return;
+    }
+    if (!window.confirm(`Delete job description "${currentJob.title}" and all its rankings?`)) return;
+    try {
+      await deleteJob(currentJob.job_id);
+      const remaining = jobs.filter((j) => j.job_id !== currentJob.job_id);
+      setJobs(remaining);
+      setSelectedJobId(remaining[0]?.job_id || '');
+      setRankings([]);
+    } catch (err: any) {
+      alert(`Failed to delete job: ${err.message}`);
+    }
+  };
+
+  // Delete all uploaded resumes
+  const handleDeleteAllResumes = async () => {
+    if (!window.confirm("Are you sure you want to delete ALL uploaded resumes and candidate profiles? This will reset all candidate queues and rankings.")) return;
+    try {
+      await deleteAllResumes();
+      setCandidates([]);
+      setRankings([]);
+    } catch (err: any) {
+      alert(`Failed to delete all resumes: ${err.message}`);
     }
   };
 
@@ -143,7 +215,7 @@ export function App() {
           }`}
         >
           <UploadCloud className="w-4 h-4" />
-          Ingest Resumes
+          Ingest Resumes ({candidates.length})
         </button>
       </nav>
 
@@ -152,79 +224,157 @@ export function App() {
         {/* Tab 1: Stack-Ranking */}
         {activeTab === 'ranking' && (
           <div className="flex flex-col gap-6">
-            {/* Job Criteria Overview & Model Selector Card */}
+            {/* Multi-JD Selector & Management Card */}
             {currentJob && (
               <div className="neu-flat p-6 flex flex-col gap-5">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                      Target Role Specification
-                    </span>
-                    <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">
-                      {currentJob.title}
-                    </h2>
+                {/* Top Row: JD Switcher & Management Actions */}
+                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                        Active Job Description ({jobs.length} Available)
+                      </span>
+                      <select
+                        value={selectedJobId}
+                        onChange={(e) => setSelectedJobId(e.target.value)}
+                        className="neu-input px-3.5 py-2 text-xs font-black text-slate-800 dark:text-slate-100 cursor-pointer min-w-[260px]"
+                      >
+                        {jobs.map((j) => (
+                          <option key={j.job_id} value={j.job_id}>
+                            {j.title} (min {j.minimum_experience_years || 0} yrs)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end">
+                      <button
+                        onClick={() => setIsCreateJobOpen(true)}
+                        className="neu-button px-3.5 py-2 flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400"
+                        title="Create new Job Description"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        New JD
+                      </button>
+
+                      <button
+                        onClick={handleDeleteJob}
+                        disabled={jobs.length <= 1}
+                        className="neu-button px-3 py-2 flex items-center gap-1 text-xs font-bold text-rose-600 dark:text-rose-400 disabled:opacity-40"
+                        title="Delete this Job Description"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete JD
+                      </button>
+
+                      {rankings.length > 0 && (
+                        <button
+                          onClick={handleClearRankings}
+                          className="neu-button px-3 py-2 flex items-center gap-1 text-xs font-bold text-amber-600 dark:text-amber-400"
+                          title="Reset/Clear rankings for this JD"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Clear Rankings
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Model Selector & Action */}
-                  <div className="flex items-center gap-3">
-                    <select
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      className="neu-input px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
-                    >
-                      <option value="rrf_hybrid">RRF Hybrid (Lexical + Semantic)</option>
-                      <option value="dense_minilm">Dense MiniLM-L6-v2</option>
-                      <option value="bm25">BM25 (Sparse Lexical)</option>
-                      <option value="weighted">Weighted Multi-Feature</option>
-                      <option value="topsis">TOPSIS Ideal-Point</option>
-                      <option value="lambdamart">LambdaMART (Learning to Rank)</option>
-                      <option value="laya_adapter">LAYA Decision Adapter</option>
-                    </select>
+                  {/* Model Selector & Run Ranking */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        Decision / Ranking Model
+                      </span>
+                      <select
+                        value={selectedModel}
+                        onChange={(e) => setSelectedModel(e.target.value)}
+                        className="neu-input px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                      >
+                        <option value="topsis">TOPSIS Ideal-Point (Decision Model)</option>
+                        <option value="weighted">Weighted Multi-Feature (Decision Model)</option>
+                        <option value="laya_adapter">LAYA Discrete Criterion Adapter</option>
+                        <option value="lambdamart">LambdaMART (Learning to Rank)</option>
+                        <option value="rrf_hybrid">RRF Hybrid (Lexical + Semantic)</option>
+                        <option value="dense_minilm">Dense MiniLM-L6-v2</option>
+                        <option value="bm25">BM25 (Sparse Lexical)</option>
+                      </select>
+                    </div>
 
                     <button
                       onClick={handleExecuteRanking}
-                      disabled={rankingLoading}
-                      className="neu-button px-5 py-2.5 flex items-center gap-2 text-xs font-black text-blue-600 dark:text-blue-400 hover:text-blue-700 disabled:opacity-50"
+                      disabled={rankingLoading || candidates.length === 0}
+                      className="neu-button px-5 py-2 flex items-center gap-2 text-xs font-black text-blue-600 dark:text-blue-400 hover:text-blue-700 disabled:opacity-50 self-end"
                     >
                       <Sparkles className={`w-4 h-4 ${rankingLoading ? 'animate-spin' : ''}`} />
-                      {rankingLoading ? 'Stack-Ranking Pool...' : 'Run Stack-Ranking'}
+                      {rankingLoading ? 'Ranking Pool...' : 'Run Stack-Ranking'}
                     </button>
                   </div>
                 </div>
 
-                {/* Criteria Chips */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {currentJob.criteria.map((c, i) => (
-                    <div
-                      key={i}
-                      className={`neu-raised-sm px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 font-medium ${
-                        c.is_required
-                          ? 'text-blue-700 dark:text-blue-300 font-bold border-l-2 border-blue-500'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      <span>{c.description}</span>
-                      <span className="text-[10px] opacity-75 font-mono">
-                        ({c.is_required ? 'Req' : 'Pref'} • w={c.weight})
-                      </span>
-                    </div>
-                  ))}
+                {/* JD Summary & Criteria Chips */}
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed italic">
+                    "{currentJob.description_text}"
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {currentJob.criteria.map((c, i) => (
+                      <div
+                        key={i}
+                        className={`neu-raised-sm px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 font-medium ${
+                          c.is_required
+                            ? 'text-blue-700 dark:text-blue-300 font-bold border-l-2 border-blue-500'
+                            : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <span>{c.description}</span>
+                        <span className="text-[10px] opacity-75 font-mono">
+                          ({c.is_required ? 'Required' : 'Preferred'} • w={c.weight})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* Top Candidate Spotlight Card */}
+            {topRanking && currentJob && (
+              <TopCandidateSpotlight
+                topRanking={topRanking}
+                candidate={topCandidate}
+                job={currentJob}
+                onOpenEvidence={handleOpenEvidence}
+                onFocusGraph={handleFocusGraphCandidate}
+              />
+            )}
+
             {/* Candidate Review Queue Table */}
             <div className="neu-flat p-6 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
                   <Award className="w-4 h-4 text-blue-500" />
-                  Candidate Queue ({rankings.length > 0 ? `${rankings.length} Ranked` : `${candidates.length} Ingested`})
+                  Candidate Queue ({rankings.length > 0 ? `${rankings.length} Ranked for ${currentJob.title}` : `${candidates.length} Ingested`})
                 </h3>
-                {rankings.length > 0 && (
-                  <span className="text-xs text-slate-500">
-                    Model: <strong className="text-blue-600">{selectedModel}</strong>
-                  </span>
-                )}
+
+                <div className="flex items-center gap-3">
+                  {candidates.length > 0 && (
+                    <button
+                      onClick={handleDeleteAllResumes}
+                      className="neu-button px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1"
+                      title="Clear all candidate resumes"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete All Resumes
+                    </button>
+                  )}
+                  {rankings.length > 0 && (
+                    <span className="text-xs text-slate-500">
+                      Model: <strong className="text-blue-600">{selectedModel}</strong>
+                    </span>
+                  )}
+                </div>
               </div>
 
               {rankings.length > 0 ? (
@@ -243,74 +393,125 @@ export function App() {
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                       {rankings.map((r) => {
                         const cand = candidates.find((c) => c.candidate_id === r.candidate_id);
+                        const isExpanded = expandedCandidateId === r.candidate_id;
+
                         return (
-                          <tr key={r.candidate_id} className="hover:bg-slate-500/5 transition-colors">
-                            {/* Rank Badge */}
-                            <td className="py-3.5">
-                              <span className="neu-raised-sm px-2.5 py-1 font-mono font-bold text-blue-600 dark:text-blue-400">
-                                #{r.rank}
-                              </span>
-                            </td>
-
-                            {/* Candidate ID */}
-                            <td className="py-3.5 font-bold text-slate-800 dark:text-slate-200">
-                              {r.candidate_id}
-                            </td>
-
-                            {/* Match Score */}
-                            <td className="py-3.5">
-                              <div className="flex items-center gap-2">
-                                <div className="w-24 h-2 neu-inset rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-blue-600 dark:bg-blue-500 rounded-full"
-                                    style={{ width: `${Math.min(100, Math.max(5, r.score * 100))}%` }}
-                                  />
-                                </div>
-                                <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                                  {(r.score * 100).toFixed(1)}%
+                          <>
+                            <tr key={r.candidate_id} className="hover:bg-slate-500/5 transition-colors">
+                              {/* Rank Badge */}
+                              <td className="py-3.5">
+                                <span
+                                  className={`neu-raised-sm px-2.5 py-1 font-mono font-bold ${
+                                    r.rank === 1
+                                      ? 'text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                      : 'text-blue-600 dark:text-blue-400'
+                                  }`}
+                                >
+                                  #{r.rank}
                                 </span>
-                              </div>
-                            </td>
+                              </td>
 
-                            {/* Experience */}
-                            <td className="py-3.5 font-medium text-slate-600 dark:text-slate-400">
-                              {cand ? `${cand.total_experience_years} yrs` : 'N/A'}
-                            </td>
+                              {/* Candidate ID */}
+                              <td className="py-3.5 font-bold text-slate-800 dark:text-slate-200">
+                                {r.candidate_id}
+                              </td>
 
-                            {/* Uncertainty */}
-                            <td className="py-3.5">
-                              {r.uncertainty_markers.length > 0 ? (
-                                <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-                                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                  <span className="truncate max-w-[200px] text-[11px]">
-                                    {r.uncertainty_markers[0]}
+                              {/* Match Score */}
+                              <td className="py-3.5">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-24 h-2 neu-inset rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        r.rank === 1 ? 'bg-amber-500' : 'bg-blue-600 dark:bg-blue-500'
+                                      }`}
+                                      style={{ width: `${Math.min(100, Math.max(5, r.score * 100))}%` }}
+                                    />
+                                  </div>
+                                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                                    {(r.score * 100).toFixed(1)}%
                                   </span>
                                 </div>
-                              ) : (
-                                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                                  No Gaps
-                                </span>
-                              )}
-                            </td>
+                              </td>
 
-                            {/* Actions */}
-                            <td className="py-3.5 text-right flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleOpenEvidence(r.candidate_id)}
-                                className="neu-button px-3 py-1.5 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1"
-                              >
-                                <FileText className="w-3 h-3" />
-                                Citations
-                              </button>
-                              <button
-                                onClick={() => handleFocusGraphCandidate(r.candidate_id)}
-                                className="neu-button px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-slate-700 flex items-center gap-1"
-                              >
-                                <Network className="w-3 h-3" />
-                                Subgraph
-                              </button>
-                            </td>
-                          </tr>
+                              {/* Experience */}
+                              <td className="py-3.5 font-medium text-slate-600 dark:text-slate-400">
+                                {cand ? `${cand.total_experience_years} yrs` : 'N/A'}
+                              </td>
+
+                              {/* Uncertainty */}
+                              <td className="py-3.5">
+                                {r.uncertainty_markers.length > 0 ? (
+                                  <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                    <span className="truncate max-w-[200px] text-[11px]">
+                                      {r.uncertainty_markers[0]}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                    No Gaps
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3.5 text-right flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() =>
+                                    setExpandedCandidateId(isExpanded ? null : r.candidate_id)
+                                  }
+                                  className="neu-button px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1"
+                                  title="Toggle Decision & LLM summary"
+                                >
+                                  <BrainCircuit className="w-3 h-3 text-blue-500" />
+                                  <span>Summary</span>
+                                  {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                </button>
+                                <button
+                                  onClick={() => handleOpenEvidence(r.candidate_id)}
+                                  className="neu-button px-3 py-1.5 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  Citations
+                                </button>
+                                <button
+                                  onClick={() => handleFocusGraphCandidate(r.candidate_id)}
+                                  className="neu-button px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-slate-700 flex items-center gap-1"
+                                >
+                                  <Network className="w-3 h-3" />
+                                  Subgraph
+                                </button>
+                              </td>
+                            </tr>
+
+                            {/* Expandable Dual Summary Row */}
+                            {isExpanded && (
+                              <tr className="bg-slate-500/5">
+                                <td colSpan={6} className="p-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                    <div className="neu-raised-sm p-3 rounded-lg flex flex-col gap-1.5 border-l-2 border-blue-500">
+                                      <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                        <BrainCircuit className="w-3.5 h-3.5" />
+                                        Decision Model Rationale ({r.model_name})
+                                      </span>
+                                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                                        {r.decision_summary || 'Standard algorithmic scoring applied.'}
+                                      </p>
+                                    </div>
+                                    <div className="neu-raised-sm p-3 rounded-lg flex flex-col gap-1.5 border-l-2 border-emerald-500">
+                                      <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                        LLM Qualification Fit
+                                      </span>
+                                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                                        {r.llm_summary || 'Candidate demonstrated verified requirement alignment.'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
                         );
                       })}
                     </tbody>
@@ -370,12 +571,28 @@ export function App() {
 
         {/* Tab 4: Ingest Resumes */}
         {activeTab === 'upload' && (
-          <ResumeUploader
-            onUploadSuccess={(profile) => {
-              setCandidates((prev) => [profile, ...prev]);
-              setActiveTab('ranking');
-            }}
-          />
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                Currently holding <strong>{candidates.length}</strong> candidate profiles in SQLite.
+              </span>
+              {candidates.length > 0 && (
+                <button
+                  onClick={handleDeleteAllResumes}
+                  className="neu-button px-4 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete All Uploaded Resumes
+                </button>
+              )}
+            </div>
+            <ResumeUploader
+              onUploadSuccess={(profile) => {
+                setCandidates((prev) => [profile, ...prev]);
+                setActiveTab('ranking');
+              }}
+            />
+          </div>
         )}
       </main>
 
@@ -386,6 +603,17 @@ export function App() {
         onClose={() => {
           setActiveCandidateForDrawer(null);
           setActiveRankingForDrawer(null);
+        }}
+      />
+
+      {/* Create Job Description Modal */}
+      <CreateJobModal
+        isOpen={isCreateJobOpen}
+        onClose={() => setIsCreateJobOpen(false)}
+        onJobCreated={(newJob) => {
+          setJobs((prev) => [newJob, ...prev]);
+          setSelectedJobId(newJob.job_id);
+          setRankings([]);
         }}
       />
     </div>

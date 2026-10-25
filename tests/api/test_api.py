@@ -89,16 +89,21 @@ def test_resumes_crud(client):
 
 
 def test_ranking_execution(client):
-    """Verify executing ranking with BM25 and RRF Hybrid models."""
-    # 1. Rank with BM25
-    payload = {"model_name": "bm25"}
+    """Verify executing ranking with BM25, RRF Hybrid, and TOPSIS models with summaries."""
+    # 1. Rank with TOPSIS Decision Model
+    payload = {"model_name": "topsis"}
     res = client.post("/api/v1/rankings/job_senior_python_lead/rank", json=payload)
     assert res.status_code == 200
     data = res.json()
-    assert data["model_name"] == "bm25"
+    assert data["model_name"] == "topsis"
     assert len(data["rankings"]) >= 1
-    assert data["rankings"][0]["rank"] == 1
+    top_rank = data["rankings"][0]
+    assert top_rank["rank"] == 1
     assert "advisory_disclaimer" in data
+    assert top_rank["decision_summary"] is not None
+    assert "TOPSIS" in top_rank["decision_summary"]
+    assert top_rank["llm_summary"] is not None
+    assert len(top_rank["llm_summary"]) > 10
 
     # 2. Rank with RRF Hybrid
     payload_rrf = {"model_name": "rrf_hybrid"}
@@ -111,6 +116,20 @@ def test_ranking_execution(client):
     res_run = client.get(f"/api/v1/rankings/runs/{run_id}")
     assert res_run.status_code == 200
     assert len(res_run.json()) == len(data["rankings"])
+
+    # 4. Retrieve latest rankings for job
+    res_latest = client.get("/api/v1/rankings/job/job_senior_python_lead/latest")
+    assert res_latest.status_code == 200
+    assert len(res_latest.json()) >= 1
+
+    # 5. Clear rankings for this job
+    res_clear = client.delete("/api/v1/rankings/job/job_senior_python_lead")
+    assert res_clear.status_code == 200
+    assert res_clear.json()["status"] == "cleared"
+
+    res_latest_after = client.get("/api/v1/rankings/job/job_senior_python_lead/latest")
+    assert res_latest_after.status_code == 200
+    assert len(res_latest_after.json()) == 0
 
 
 def test_graph_visualization(client):
@@ -146,3 +165,14 @@ def test_evaluations_and_fairness(client):
     assert "counterfactual_stability" in audit_data
     assert "demographic_parity" in audit_data
     assert "advisory_notice" in audit_data
+
+
+def test_delete_all_resumes(client):
+    """Verify bulk deletion of all resumes and candidate profiles."""
+    res_del = client.delete("/api/v1/resumes/")
+    assert res_del.status_code == 200
+    assert res_del.json()["status"] == "all_resumes_deleted"
+
+    res_list = client.get("/api/v1/resumes/")
+    assert res_list.status_code == 200
+    assert len(res_list.json()) == 0

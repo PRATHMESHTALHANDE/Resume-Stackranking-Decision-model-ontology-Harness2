@@ -131,3 +131,41 @@ export async function uploadResumeFile(file: File): Promise<{
   }
   return res.json();
 }
+
+export async function deleteAllResumes(): Promise<void> {
+  const res = await fetch(`${API_BASE}/resumes/`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete all resumes');
+}
+
+export async function createJob(job: Partial<JobDescription>): Promise<JobDescription> {
+  const res = await fetch(`${API_BASE}/jobs/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(job),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to create job description');
+  }
+  return res.json();
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Failed to delete job '${jobId}'`);
+}
+
+export async function fetchLatestRankingForJob(jobId: string): Promise<RankingResult[]> {
+  const res = await fetch(`${API_BASE}/rankings/job/${encodeURIComponent(jobId)}/latest`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function deleteRankingsForJob(jobId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/rankings/job/${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Failed to clear rankings for job '${jobId}'`);
+}

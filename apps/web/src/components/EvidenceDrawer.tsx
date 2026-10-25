@@ -33,17 +33,43 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({ candidate, ranki
 
       {/* Ranking Summary Badge */}
       {ranking && (
-        <div className="neu-inset p-4 rounded-xl flex items-center justify-between">
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Model Decision Score</div>
-            <div className="text-xl font-black text-blue-600 dark:text-blue-400">
-              {(ranking.score * 100).toFixed(1)}% <span className="text-xs font-normal text-slate-500">({ranking.model_name})</span>
+        <div className="flex flex-col gap-3">
+          <div className="neu-inset p-4 rounded-xl flex items-center justify-between">
+            <div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Model Decision Score</div>
+              <div className="text-xl font-black text-blue-600 dark:text-blue-400">
+                {(ranking.score * 100).toFixed(1)}% <span className="text-xs font-normal text-slate-500">({ranking.model_name})</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Rank Queue Position</div>
+              <div className="text-lg font-bold text-slate-800 dark:text-slate-200">#{ranking.rank}</div>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Rank Queue Position</div>
-            <div className="text-lg font-bold text-slate-800 dark:text-slate-200">#{ranking.rank}</div>
-          </div>
+
+          {/* Decision Model Rationale */}
+          {ranking.decision_summary && (
+            <div className="neu-raised-sm p-3.5 rounded-xl flex flex-col gap-1.5 border-l-2 border-blue-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                Decision Model Rationale ({ranking.model_name})
+              </span>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                {ranking.decision_summary}
+              </p>
+            </div>
+          )}
+
+          {/* LLM Qualification Justification */}
+          {ranking.llm_summary && (
+            <div className="neu-raised-sm p-3.5 rounded-xl flex flex-col gap-1.5 border-l-2 border-emerald-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                LLM Qualification Summary
+              </span>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                {ranking.llm_summary}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

@@ -20,6 +20,7 @@ from packages.common.database import (
     list_parsed_profiles,
     get_parsed_profile,
     delete_resume,
+    delete_all_resumes,
     get_resume,
     list_resumes,
 )
@@ -121,6 +122,15 @@ def get_candidate(candidate_id: str):
             detail=f"Candidate profile '{candidate_id}' not found.",
         )
     return profile
+
+
+@router.delete("/", status_code=status.HTTP_200_OK)
+def remove_all_candidates():
+    """
+    Cascading deletion of all candidate profiles, source resumes, and ranking history.
+    """
+    delete_all_resumes()
+    return {"status": "all_resumes_deleted"}
 
 
 @router.delete("/{candidate_id}", status_code=status.HTTP_200_OK)

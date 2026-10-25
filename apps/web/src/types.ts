@@ -74,6 +74,8 @@ export interface RankingResult {
   component_scores: Record<string, number>;
   evidence_citations: EvidenceReference[];
   uncertainty_markers: string[];
+  decision_summary?: string | null;
+  llm_summary?: string | null;
   run_id: string;
   created_at: string;
 }

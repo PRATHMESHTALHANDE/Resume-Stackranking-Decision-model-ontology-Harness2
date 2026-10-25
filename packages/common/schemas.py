@@ -272,6 +272,14 @@ class RankingResult(BaseModel):
         default_factory=list,
         description="Uncertainty warnings (e.g. 'missing_required_criterion:Docker')",
     )
+    decision_summary: Optional[str] = Field(
+        None,
+        description="Algorithmic rationale of how the decision model scored this candidate.",
+    )
+    llm_summary: Optional[str] = Field(
+        None,
+        description="Natural language justification of why this candidate is suitable/top-ranked.",
+    )
     run_id: str = Field(..., description="Unique ID of the ranking execution run")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
