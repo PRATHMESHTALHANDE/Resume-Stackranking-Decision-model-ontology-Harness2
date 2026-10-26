@@ -17,6 +17,22 @@
 
 ---
 
+## 🧠 Core AI Models, Decision Systems & GitHub Code Reference
+
+To ensure 100% transparency, reproducibility, and zero-black-box auditing, every AI decision system, generative model, vector embedding, and decision tree used in this repository is explicitly detailed below with its upstream model weights, architecture parameters, and corresponding codebase file:
+
+| Role in System | Model / Algorithm Name | Upstream Model Repository / Source | Parameters & Specs | Codebase Implementation | Operational Function |
+|---|---|---|---|---|---|
+| **Neural Decision Model** | **LAYA System-1** | [`convaiinnovations/laya`](https://huggingface.co/convaiinnovations/laya) on Hugging Face | 421M params, ModernBERT-large, non-autoregressive | [`packages/decision_models/laya_adapter.py`](packages/decision_models/laya_adapter.py) | Evaluates candidate resume evidence against discrete JD criteria in a single forward pass without token-by-token generation hallucinations. |
+| **MCDA Decision Model** | **TOPSIS** | Classical Multi-Criteria Decision Analysis | Geometric Ideal-Point Optimization | [`packages/ranking/topsis_ranker.py`](packages/ranking/topsis_ranker.py) | Computes Pareto-optimal candidate distance to Positive ($A^+$) and Negative ($A^-$) ideal attribute solutions. |
+| **Generative LLM (Local)** | **Qwen2.5-1.5B-Instruct** | [`Qwen/Qwen2.5-1.5B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) on Hugging Face | 1.54B params, 4-bit GGUF (`Q4_K_M`), local `llama-cpp` | [`packages/extraction/llm_extractor.py`](packages/extraction/llm_extractor.py)<br>[`packages/decision_models/explanation.py`](packages/decision_models/explanation.py) | Performs structured JSON resume entity extraction, qualification fit reasoning, and natural language recruiter summaries. |
+| **Semantic Vector Embedding** | **all-MiniLM-L6-v2** | [`sentence-transformers/all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) on HF | 22.7M params, 384-dimensional bi-encoder | [`packages/ranking/dense_ranker.py`](packages/ranking/dense_ranker.py) | Computes dense semantic cosine similarities across job criteria and candidate evidence to resolve vocabulary and phrasing gaps. |
+| **Learning-to-Rank Decision Forest** | **LightGBM LambdaMART** | [`microsoft/LightGBM`](https://github.com/microsoft/LightGBM) on GitHub | Gradient Boosted Decision Tree (GBDT) ensemble | [`packages/ranking/lambdamart_ranker.py`](packages/ranking/lambdamart_ranker.py) | Supervised listwise learning-to-rank optimizing Normalized Discounted Cumulative Gain (nDCG). |
+| **Skill Ontology & Graph** | **ESCO Classification v1.2.0** | [European Commission ESCO](https://esco.ec.europa.eu/) & [`networkx`](https://github.com/networkx/networkx) | 13,890 skills, 3,008 occupations, multilingual | [`packages/ontology/esco_loader.py`](packages/ontology/esco_loader.py)<br>[`packages/graph/skill_graph.py`](packages/graph/skill_graph.py) | Standardizes raw resume tokens to canonical skills and models hierarchical relationships for gap discovery. |
+| **Benchmarking & Evaluation** | **Harness 2 & ranx** | [`AmenRa/ranx`](https://github.com/AmenRa/ranx) on GitHub | Fast ranking evaluation metrics (nDCG, MRR, MAP) | [`packages/evaluation/harness.py`](packages/evaluation/harness.py) | Evaluates cross-model ranking consensus, counterfactual fairness shifts, and benchmark metrics against golden annotations. |
+
+---
+
 ## 🖥️ System Walkthrough: Multi-JD & Decision Model Stackranking
 
 The platform features an accessible Neumorphic Soft UI (WCAG 2.2 AA compliant) designed to provide full transparency, explainability, and multi-criteria evaluation across candidates.
