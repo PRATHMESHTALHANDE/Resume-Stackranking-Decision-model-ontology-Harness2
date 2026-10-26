@@ -13,8 +13,16 @@ Official integration of the Laya System-1 Decision Model:
 ================================================================================
 """
 
+import os
 import logging
 from typing import Dict, Any, List, Optional
+
+# Suppress Hugging Face symlink warnings on Windows and enforce sandboxed cache
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+from packages.common.settings import CACHE_DIR
+os.environ["HF_HOME"] = str(CACHE_DIR / "huggingface")
+
 from packages.common.schemas import JobDescription, ResumeProfile, RankingResult, EvidenceReference
 from packages.ranking.base import BaseRanker, BaseDecisionModel
 
@@ -79,43 +87,42 @@ class LayaDecisionAdapter(BaseRanker, BaseDecisionModel):
         candidate_evidence_text: str,
     ) -> Dict[str, Any]:
         """
-        Evaluates candidate evidence against a single job criterion using Laya's typed choice primitive.
+        Evaluates candidate evidence against a single job criterion using Laya's noul decision primitive.
 
         Returns:
             Dict containing:
             - decision: 'match' | 'partial' | 'no_match'
             - score: float in [0.0, 1.0] (1.0 for match, 0.5 for partial, 0.0 for no_match)
             - confidence: float calibrated confidence probability
+            - probability: float raw decision probability P(true)
             - is_neural: bool indicating whether neural inference was executed
         """
         # 1. Attempt real neural inference if agent is active
         if self.is_neural_active:
             try:
                 state = {
-                    "evidence": candidate_evidence_text[:2500] if candidate_evidence_text else "No evidence provided."
+                    "evidence": candidate_evidence_text[:2000] if candidate_evidence_text else "No evidence provided."
                 }
                 questions = {
                     "criterion_match": {
-                        "type": "choice",
-                        "instructions": (
-                            f"Evaluate whether the candidate's verified evidence satisfies the requirement: "
-                            f"'{criterion_description}'"
-                        ),
-                        "criteria": {
-                            "match": "Evidence explicitly demonstrates full competence or meets the requirement",
-                            "partial": "Evidence demonstrates related, foundational, or partial competence",
-                            "no_match": "No supporting evidence found or candidate fails the requirement",
-                        },
+                        "type": "noul",
+                        "instructions": f"Does `evidence` demonstrate competence, skill, or verified experience with {criterion_description}?",
                     }
                 }
                 prediction = self._agent.predict(state, questions)
-                eval_res = prediction.get("criterion_match", {})
-                decision = str(eval_res.get("answer", "no_match")).lower()
-                confidence = float(eval_res.get("confidence", 0.85))
+                answers = prediction.get("answers", {}) if isinstance(prediction, dict) else {}
+                eval_res = answers.get("criterion_match", {})
+                if not eval_res and isinstance(prediction, dict):
+                    eval_res = prediction.get("criterion_match", {})
 
-                if decision == "match":
+                noul_prob = float(eval_res.get("noul", 0.0))
+                confidence = float(eval_res.get("answer_confidence") or eval_res.get("confidence") or 0.85)
+
+                if noul_prob >= 0.55:
+                    decision = "match"
                     score = 1.0
-                elif decision == "partial":
+                elif noul_prob >= 0.30:
+                    decision = "partial"
                     score = 0.5
                 else:
                     decision = "no_match"
@@ -125,6 +132,7 @@ class LayaDecisionAdapter(BaseRanker, BaseDecisionModel):
                     "decision": decision,
                     "score": score,
                     "confidence": confidence,
+                    "probability": noul_prob,
                     "is_neural": True,
                 }
             except Exception as e:
@@ -155,7 +163,8 @@ class LayaDecisionAdapter(BaseRanker, BaseDecisionModel):
         config: Dict[str, Any] = None,
     ) -> List[RankingResult]:
         """
-        Ranks candidates by aggregating discrete criterion-level decisions across the job specification.
+        Ranks candidates by evaluating discrete criterion-level decisions across the job specification
+        using Laya's batch forward pass architecture.
         """
         if not candidates:
             return []
@@ -163,10 +172,44 @@ class LayaDecisionAdapter(BaseRanker, BaseDecisionModel):
         scored_candidates = []
         is_neural = self.is_neural_active
 
+        # Build questions dictionary for all job criteria using noul verification
+        questions = {}
+        for crit in job.criteria:
+            qid = f"crit_{crit.criterion_id}"
+            questions[qid] = {
+                "type": "noul",
+                "instructions": f"Does `evidence` demonstrate competence, skill, or verified experience with {crit.description}?",
+            }
+
+        # Build candidate states with clean evidence summaries
+        candidate_states = []
         for cand in candidates:
-            cand_evidence_text = " ".join(
-                s.original_text + " " + (s.evidence.verbatim_snippet if s.evidence else "")
-                for s in cand.skills
+            cand_skills_str = ", ".join(s.original_text for s in cand.skills)
+            snippets = [s.evidence.verbatim_snippet for s in cand.skills if s.evidence]
+            cand_evidence = (
+                f"Candidate verified experience: {cand.total_experience_years:.1f} years. "
+                f"Verified skills: {cand_skills_str}. "
+                f"Resume Evidence: {' '.join(snippets)[:1800]}"
+            )
+            candidate_states.append({"evidence": cand_evidence})
+
+        # Execute high-throughput batch prediction if neural agent is active
+        batch_predictions = None
+        if is_neural:
+            try:
+                batch_predictions = self._agent.predict_batch(candidate_states, questions)
+            except Exception as exc:
+                logger.warning(f"Laya predict_batch error ({exc}). Falling back to sequential evaluation.")
+                batch_predictions = None
+
+        total_weights = sum(c.weight for c in job.criteria) or 1.0
+
+        for idx, cand in enumerate(candidates):
+            cand_evidence_text = candidate_states[idx]["evidence"]
+            cand_eval = (
+                batch_predictions[idx].get("answers", {})
+                if batch_predictions and idx < len(batch_predictions) and isinstance(batch_predictions[idx], dict)
+                else None
             )
 
             total_score = 0.0
@@ -174,13 +217,30 @@ class LayaDecisionAdapter(BaseRanker, BaseDecisionModel):
             confidences = []
 
             for crit in job.criteria:
-                decision = self.evaluate_criterion(crit.description, cand_evidence_text)
-                weight = crit.weight
-                total_score += weight * decision["score"]
-                breakdown[f"crit_{crit.criterion_id}"] = decision["score"]
-                confidences.append(decision.get("confidence", 0.8))
+                qid = f"crit_{crit.criterion_id}"
+                if cand_eval and qid in cand_eval:
+                    eval_res = cand_eval[qid]
+                    noul_prob = float(eval_res.get("noul", 0.0))
+                    conf = float(eval_res.get("answer_confidence") or eval_res.get("confidence") or 0.85)
 
-            total_weights = sum(c.weight for c in job.criteria) or 1.0
+                    if noul_prob >= 0.55:
+                        crit_score = 1.0
+                    elif noul_prob >= 0.30:
+                        crit_score = 0.5
+                    else:
+                        crit_score = 0.0
+
+                    total_score += crit.weight * crit_score
+                    breakdown[qid] = crit_score
+                    breakdown[f"{qid}_prob"] = round(noul_prob, 3)
+                    confidences.append(conf)
+                else:
+                    # Fallback to single evaluate_criterion or rubric
+                    dec = self.evaluate_criterion(crit.description, cand_evidence_text)
+                    total_score += crit.weight * dec["score"]
+                    breakdown[qid] = dec["score"]
+                    confidences.append(dec.get("confidence", 0.8))
+
             norm_score = total_score / total_weights
             avg_conf = sum(confidences) / max(len(confidences), 1)
             breakdown["avg_confidence"] = round(avg_conf, 3)
@@ -195,8 +255,8 @@ class LayaDecisionAdapter(BaseRanker, BaseDecisionModel):
         results = []
         model_label = (
             "laya (convaiinnovations/laya System-1)"
-            if is_neural
-            else "laya (deterministic_rubric_fallback)"
+            if is_neural and batch_predictions is not None
+            else ("laya (convaiinnovations/laya System-1)" if is_neural else "laya (deterministic_rubric_fallback)")
         )
 
         for rank_1b, (cid, score, bdown, cits, uncerts) in enumerate(scored_candidates, start=1):
@@ -215,3 +275,4 @@ class LayaDecisionAdapter(BaseRanker, BaseDecisionModel):
             )
 
         return results
+
