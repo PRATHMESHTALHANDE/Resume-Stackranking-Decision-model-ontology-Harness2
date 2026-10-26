@@ -39,7 +39,7 @@ class EnsembleSymbiosisRanker(BaseRanker):
 
     def __init__(self):
         self.topsis = TOPSISRanker()
-        self.laya = LayaDecisionAdapter(use_mock=True)
+        self.laya = LayaDecisionAdapter(use_mock=False)
         self.weighted = WeightedScorer()
         self.rrf = RRFRanker()
         self.dense = DenseRanker()

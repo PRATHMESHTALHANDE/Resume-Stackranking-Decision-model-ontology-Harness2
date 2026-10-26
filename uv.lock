@@ -619,6 +619,22 @@ wheels = [
 ]
 
 [[package]]
+name = "laya"
+version = "0.4.15"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "safetensors" },
+    { name = "torch" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/af/52/039a086dd27ced3dc858caae1a2aa6771aa421c9dd7fd2ee3bae8496686a/laya-0.4.15.tar.gz", hash = "sha256:03d5a53e2206fbdb614266405ddc081f285ce99a80613c38de21d8949bb90f5b", size = 1356145, upload-time = "2026-10-24T19:19:03.801Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/8a/02cdddba94fdaeedca93fc161ad0688da49834b42803f5072f7ec286df78/laya-0.4.15-py3-none-any.whl", hash = "sha256:f51301738464677cb650159684537eb267de47d33f3db4d8897f1502a9570e6e", size = 451484, upload-time = "2026-10-24T19:19:02.099Z" },
+]
+
+[[package]]
 name = "lightgbm"
 version = "4.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1441,6 +1457,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "fairlearn" },
     { name = "fastapi" },
+    { name = "laya" },
     { name = "lightgbm" },
     { name = "networkx" },
     { name = "numpy" },
@@ -1478,6 +1495,7 @@ requires-dist = [
     { name = "fairlearn", specifier = ">=0.11.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.2" },
+    { name = "laya", specifier = ">=0.4.15" },
     { name = "lightgbm", specifier = ">=4.5.0" },
     { name = "llama-cpp-python", marker = "extra == 'llm'", specifier = ">=0.2.90" },
     { name = "networkx", specifier = ">=3.3" },

@@ -43,7 +43,7 @@ RANKER_REGISTRY = {
     "weighted": WeightedScorer,
     "topsis": TOPSISRanker,
     "lambdamart": LambdaMARTRanker,
-    "laya_adapter": lambda: LayaDecisionAdapter(use_mock=True),
+    "laya_adapter": lambda: LayaDecisionAdapter(use_mock=False),
     "ensemble_symbiosis": EnsembleSymbiosisRanker,
 }
 

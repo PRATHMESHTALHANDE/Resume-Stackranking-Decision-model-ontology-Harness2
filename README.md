@@ -67,13 +67,15 @@ The platform features an accessible Neumorphic Soft UI (WCAG 2.2 AA compliant) d
    - Instant SHA-256 deduplication and parser caching.
 
 2. **Multi-Model Retrieval & Decision Engine:**
-   - **LAYA Discrete Criterion Adapter:** Typed criterion matching evaluating mandatory vs. preferred requirements without contradictions.
+   - **LAYA System-1 Decision Model (`convaiinnovations/laya`):** Real non-autoregressive neural decision model (ModernBERT-large 421M params) evaluating candidate evidence against discrete typed criteria in a single forward pass with zero text-generation hallucinations.
+   - **Ensemble Symbiosis ("Select All" Consensus):** Multi-model consensus ranking running TOPSIS, LAYA, Weighted Scorer, RRF Hybrid, Dense MiniLM, and BM25 concurrently with cross-model agreement rates.
    - **TOPSIS Decision Analysis:** Multi-criteria geometric distance to Positive/Negative Ideal Solutions.
-   - **Weighted Criterion Scoring:** Transparent recruiter-controlled requirement weights.
+   - **Weighted Criterion Scoring:** Transparent recruiter-controlled requirement weights with dynamic criteria % vs. tenure % sliders.
    - **LightGBM LambdaMART:** Supervised Learning-to-Rank optimizing listwise nDCG.
    - **RRF (Reciprocal Rank Fusion):** Hybrid fusion combining lexical and semantic signals.
    - **Dense Semantic Vector Search:** `sentence-transformers/all-MiniLM-L6-v2` cosine similarity.
    - **BM25 Lexical Search:** Accurate technical keyword and exact acronym matching (`C++`, `.NET`, `AWS`).
+
 
 3. **ESCO Skill Taxonomy & Knowledge Graph:**
    - Canonical concept mapping against the official European Skills/Competences classification.

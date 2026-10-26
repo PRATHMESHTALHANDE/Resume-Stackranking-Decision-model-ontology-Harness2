@@ -38,7 +38,7 @@ class EvaluationHarness:
             "rrf_hybrid": RRFRanker(),
             "weighted": WeightedScorer(),
             "topsis": TOPSISRanker(),
-            "laya_adapter": LayaDecisionAdapter(use_mock=True),
+            "laya_adapter": LayaDecisionAdapter(use_mock=False),
         }
 
     def run_benchmark(
